@@ -1,0 +1,11 @@
+*
+
+!.gitignore
+!*.py
+!*.ipynb
+!*.txt
+!*.sh
+!*.png
+!*.jpg
+!*.md
+
