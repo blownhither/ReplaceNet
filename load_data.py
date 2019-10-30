@@ -55,7 +55,7 @@ def parse_sod():
 def load_parsed_sod():
     d = np.load('data/sod-pairs.npz', allow_pickle=True)
     images, masks = d['images'], d['masks']
-    return images, masks
+    return np.array(images), np.array(masks)
 
 
 def visualize_sod():
