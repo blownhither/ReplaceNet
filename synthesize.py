@@ -98,7 +98,7 @@ class Synthesizer:
         background_image = background_image / 255.0
         synthesized_image = background_image + foreground_object
 
-        return inpainted_background_image, background_image, foreground_object, synthesized_image
+        return synthesized_image
             
 
     def load_model(self, input_image):
