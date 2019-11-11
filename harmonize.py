@@ -136,9 +136,10 @@ def tweak_foreground(image, mask):
     """
     tweak foreground by apply random factor
     """
-    mask_3d = np.expand_dims(mask, 2)
     tweaked = mask_3d * image * np.random.uniform(0.1, 2)
-    return (1 - mask_3d) * image + tweaked
+    new_image = (1 - mask_3d) * image + tweaked
+    new_image *= (1.0/new_image.max())
+    return new_image
 
 
 def train():
