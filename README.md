@@ -21,3 +21,16 @@ with direct supervision from image synthesis
   assert masks[0].dtype == np.bool
 
     ```
+    
+### Using Synthesizer
+
+```python
+from synthesize import Synthesizer
+from load_data import load_parsed_sod
+from matplotlib import pyplot as plt
+s = Synthesizer()
+images, mask = load_parsed_sod()
+si = s.synthesize(image=images[223], mask=mask[223], reference_mask=mask[53])
+plt.imshow(si)
+plt.show()
+```
