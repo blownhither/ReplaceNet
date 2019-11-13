@@ -1,14 +1,15 @@
-import cv2
 import numpy as np
 import tensorflow as tf
 import neuralgym as ng
 from inpaint_model import InpaintCAModel
 from load_data import load_parsed_sod
 from matplotlib import pyplot as plt
+from skimage.transform import resize
+import skimage
 
 class Synthesizer:
 
-    def __init__(self, saved_model_path = './model_logs/release_places2_256'):
+    def __init__(self, patch_size=512, saved_model_path = './model_logs/release_places2_256'):
         '''
         Saved model weights url:
             https://drive.google.com/drive/folders/1y7Irxm3HSHGvp546hZdAZwuNmhLUVcjO
@@ -24,14 +25,11 @@ class Synthesizer:
 
         self.model_should_load = True
 
-    def rotate(self, image):
-        '''
-            Images are vertical and horizontal. Make them all horizontal. (321, 481) 
-        '''
-        if image.shape[0] == 321:
-            return image
-        else:
-            return image.swapaxes(0,1)
+        self.patch_size = patch_size
+
+    def equal_size(self, image):
+        image = resize(skimage.img_as_float(image), (self.patch_size, self.patch_size))
+        return image
 
     def get_background(self, image, mask, reference_mask):
         # image is ground_truth_image
@@ -81,12 +79,12 @@ class Synthesizer:
         return new_image
 
     def synthesize(self, image, mask, reference_mask):
-        image = self.rotate(image)
-        mask = self.rotate(mask)
-        reference_mask = self.rotate(reference_mask)
+        image = self.equal_size(image)
+        mask = skimage.img_as_bool(self.equal_size(mask))
+        reference_mask = skimage.img_as_bool(self.equal_size(reference_mask))
 
         inpainted_background_image = self.get_background(image, mask, reference_mask)
-        inpainted_background_image = cv2.resize(inpainted_background_image,(int(481),int(321)))
+        inpainted_background_image = resize(inpainted_background_image,(self.patch_size, self.patch_size))
 
         background_image = inpainted_background_image.copy()
         background_image[mask==True] = (0, 0, 0)
