@@ -8,8 +8,7 @@ from skimage.transform import resize
 from load_data import load_parsed_sod
 
 
-
-class ParameterizedUNet:
+class ReplaceNet:
     def __init__(self, patch_size):
         # hyperparameters
         self.size = patch_size
@@ -19,9 +18,8 @@ class ParameterizedUNet:
         # self.up_channels = [256, 128, 64, 32]
         self.batch_size = None
         self.lr = 1e-3
-        self.translator_hidden = 32
 
-        # i/o tensor
+        # i/o tensors
         # input img should be patches in size 512
         self.input_img = tf.placeholder(shape=[None, self.size, self.size, 3], dtype=tf.float32)
         self.truth_img = tf.placeholder(shape=[None, self.size, self.size, 3], dtype=tf.float32)
@@ -32,7 +30,6 @@ class ParameterizedUNet:
 
         # internal tensors, set after building
         self.down_layers = None
-        self.up_layers = None
         self.l2_loss = None
         self.mask_loss = None
         self.loss = None
@@ -42,17 +39,18 @@ class ParameterizedUNet:
         self.global_step = None
         self.saver = None
 
-    def build(self):
+    def build(self, mask_loss_weight=0):
         self.down_layers, encoder_out = self._build_down(self.input_img)
-        with tf.variable_scope('reconstruct'):
-            self.output_img = self._build_up(encoder_out, self.down_layers, 3)
         with tf.variable_scope('mask'):
-            output_mask = self._build_up(encoder_out, self.down_layers, 1)
+            output_mask, mask_layers = self._build_up(encoder_out, self.down_layers, 1)
+        with tf.variable_scope('reconstruct'):
+            self.output_img, _ = self._build_up(encoder_out, self.down_layers, 3,
+                                                up_layers_feed=mask_layers)
         self.output_mask = tf.squeeze(output_mask, axis=3)
 
         self.l2_loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
         self.mask_loss = tf.losses.mean_squared_error(self.truth_mask, self.output_mask)
-        self.loss = self.l2_loss + self.mask_loss
+        self.loss = self.l2_loss + self.mask_loss * mask_loss_weight
 
         tf.summary.scalar('l2-loss', self.l2_loss)
         tf.summary.scalar('mask-loss', self.mask_loss)
@@ -76,14 +74,13 @@ class ParameterizedUNet:
             tensor = tf.layers.conv2d(tensor, c, [3, 3], activation=tf.nn.leaky_relu,
                                       padding='same')
             # TODO: no normalization?
-            # tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
+            tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
             # only one conv for the first layer
             if i != 0:
                 tensor = tf.layers.conv2d(tensor, c, [3, 3], activation=tf.nn.leaky_relu,
-                                          padding='same')
-                # TODO: no normalization?
-                # tensor = tf.layers.batch_normalization(tensor, name=f'down_block{i}_out',
-                #                                        training=self.is_training)
+                                          padding='same')  # TODO: no normalization?  # tensor =
+                tf.layers.batch_normalization(tensor, name=f'down_block{i}_out',  #
+                                              training=self.is_training)
             else:
                 # extra skip connection in the first down layer
                 tensor = tf.concat([tensor, img], axis=3)
@@ -95,7 +92,7 @@ class ParameterizedUNet:
         print('down', down_layers)
         return down_layers, tensor
 
-    def _build_up(self, img, down_layers, out_channel):
+    def _build_up(self, img, down_layers, out_channel, up_layers_feed=None):
         # TODO: harmonization use flatten
         up_layers = []
         tensor = img
@@ -111,15 +108,20 @@ class ParameterizedUNet:
             tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
             tensor = tf.layers.conv2d(tensor, c, [3, 3], activation=tf.nn.leaky_relu,
                                       padding='same')
+
+            # harmonization decoder get feeds from scene parsing decoder
+            # if up_layers_feed:
+            #     tensor = tf.concat([tensor, up_layers_feed[i]], axis=3)
             tensor = tf.layers.batch_normalization(tensor, name=f'up_block{i}_out',
                                                    training=self.is_training)
             up_layers.append(tensor)
+
         # print('up', up_layers)
-        tf.layers.conv2d(tensor, 12, [3, 3], activation=tf.nn.leaky_relu, padding='same')
+        tensor = tf.layers.conv2d(tensor, 12, [3, 3], activation=tf.nn.leaky_relu, padding='same')
         tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
-        output_img = tf.layers.conv2d(tensor, out_channel, [3, 3], activation=tf.nn.sigmoid, padding='same',
-                                      name='reconstructed')
-        return output_img
+        output_img = tf.layers.conv2d(tensor, out_channel, [3, 3], activation=tf.nn.sigmoid,
+                                      padding='same', name='reconstructed')
+        return output_img, up_layers
 
     def save(self, sess, path="tmp/paired/", global_step=None):
         if not os.path.exists(path):
@@ -144,50 +146,58 @@ def tweak_foreground(image, mask):
 def train():
     np.random.seed(0)
     patch_size = 256
+    batch_size = 8
 
     images, masks = load_parsed_sod()
     images = np.array([resize(im, (patch_size, patch_size)) for im in images])
-    masks = np.array([skimage.img_as_bool(resize(skimage.img_as_float(ms), (patch_size, patch_size))) for ms in masks])
+    masks = np.array(
+        [skimage.img_as_bool(resize(skimage.img_as_float(ms), (patch_size, patch_size))) for ms in
+         masks])
     sess = tf.Session()
     net = ParameterizedUNet(patch_size=patch_size)
     net.build()
     sess.run(tf.global_variables_initializer())
 
     for epoch in range(500):
-        index = np.arange(len(images))
-        np.random.shuffle(index)
-        images = images[index]
-        masks = masks[index]
-        out = None
+        out_im = None
         truth_img = None
         tweaked = None
+        out_mask = None
+        truth_mask = None
 
-        for i, (truth_img, input_mask) in enumerate(zip(images, masks)):
-            tweaked = tweak_foreground(truth_img, input_mask)
+        index = np.arange(len(images))
+        np.random.shuffle(index)
+        for i, batch_index in enumerate(np.array_split(index, len(index) // batch_size)):
+            truth_img = images[batch_index]
+            truth_mask = masks[batch_index]
+            tweaked = [tweak_foreground(im, ms) for im, ms in zip(truth_img, truth_mask)]
             # TODO: tweaked is in (0, 1) which is good but why
-            _, loss, out = sess.run([net.train_op, net.l2_loss, net.output_img], feed_dict={
-                net.input_img: [tweaked],
-                net.truth_img: [truth_img],
-                net.truth_mask: [input_mask],
-            })
-            print('epoch', epoch, 'instance', i, loss, flush=True)
+            _, loss, out_im, out_mask = sess.run(
+                [net.train_op, net.l2_loss, net.output_img, net.output_mask],
+                feed_dict={
+                    net.input_img: tweaked,
+                    net.truth_img: truth_img,
+                    net.truth_mask: truth_mask
+                })
+            print('epoch', epoch, 'batch', i, loss, flush=True)
         else:
-            plt.subplot(1, 3, 1)
-            plt.imshow(tweaked)
+            plt.subplot(2, 3, 1)
+            plt.imshow(tweaked[0])
             plt.title('Input')
-            plt.subplot(1, 3, 2)
-            plt.imshow(truth_img)
+            plt.subplot(2, 3, 2)
+            plt.imshow(truth_img[0])
             plt.title('Truth')
-            plt.subplot(1, 3, 3)
-            plt.imshow(out[0])
+            plt.subplot(2, 3, 3)
+            plt.imshow(out_im[0])
             plt.title('out')
+            plt.subplot(2, 3, 5)
+            plt.imshow(truth_mask[0])
+            plt.subplot(2, 3, 6)
+            plt.imshow(out_mask[0])
+            plt.colorbar()
             plt.savefig(f'tmp/{epoch}.png')
             plt.close()
 
 
 if __name__ == '__main__':
     train()
-
-
-
-

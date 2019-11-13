@@ -10,14 +10,23 @@ with direct supervision from image synthesis
     - http://elderlab.yorku.ca/SOD/SOD.zip
     - https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/segbench/BSDS300-images.tgz
     - decompress into SOD/ and BSDS300/ 
-    ![](https://i.ibb.co/py0tSKk/masks.png)
-    
-    
-    
+    ![](https://i.ibb.co/py0tSKk/masks.png)  
     ```python
   import numpy as np
-  from load_data import load_parsed_data
-  images, masks = load_parsed_data()
+  from load_data import load_parsed_sod
+  images, masks = load_parsed_sod()
   assert masks[0].dtype == np.bool
-
     ```
+    
+    
+### Training
+- harmonize.py
+    - [Deep Image Harmonization](https://arxiv.org/pdf/1703.00069.pdf)
+    - 
+
+
+
+
+
+
+
