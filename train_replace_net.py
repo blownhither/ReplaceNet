@@ -1,4 +1,5 @@
 import skimage
+import datetime
 import numpy as np
 import tensorflow as tf
 from skimage.transform import resize
@@ -20,9 +21,10 @@ def tweak_foreground(image, mask):
 
 
 def train():
+    DATETIME_STR = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
     np.random.seed(0)
     patch_size = 512
-    batch_size = 8
+    batch_size = 16
 
     images, masks = load_parsed_sod()
     images = np.array([resize(im, (patch_size, patch_size)) for im in images])
@@ -32,6 +34,7 @@ def train():
     sess = tf.Session()
     net = ReplaceNet(patch_size=patch_size)
     net.build(is_training=True)
+    train_summary_writer = tf.summary.FileWriter(f'tmp/summary/summary-{DATETIME_STR}', sess.graph)
     sess.run(tf.global_variables_initializer())
 
     for epoch in range(500):
@@ -47,11 +50,13 @@ def train():
             truth_mask = masks[batch_index]
             tweaked = [tweak_foreground(im, ms) for im, ms in zip(truth_img, truth_mask)]
             # TODO: tweaked is in (0, 1) which is good but why
-            _, loss, out_im = sess.run([net.train_op, net.loss, net.output_img],
-                                       feed_dict={net.input_img: tweaked,
-                                                  net.input_mask: truth_mask,
-                                                  net.truth_img: truth_img})
+            _, loss, out_im, summary, step_val = sess.run(
+                [net.train_op, net.loss, net.output_img, net.merged_summary, net.global_step],
+                feed_dict={net.input_img: tweaked, net.input_mask: truth_mask,
+                           net.truth_img: truth_img})
+            train_summary_writer.add_summary(summary, global_step=step_val)
             print('epoch', epoch, 'batch', i, loss, flush=True)
+
         else:
             plt.subplot(2, 3, 1)
             plt.imshow(tweaked[0])

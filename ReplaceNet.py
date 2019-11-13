@@ -78,13 +78,12 @@ class ReplaceNet:
     def _build_up(self, fc, down_layers, is_training):
         up_layers = []
         with tf.name_scope('h-decoder'):
-            # TODO: cannot use [None, 1, 1, 1024] as in official impl !!!
-            # try stride = 4
-            tensor = tf.reshape(fc, [-1, 2, 2, self.fc_size // 4])
+            tensor = tf.reshape(fc, [-1, 1, 1, self.fc_size])
 
             for i, c in enumerate(self.up_channels):
-                # print('before', tensor)
-                tensor = tf.layers.conv2d_transpose(tensor, c, [4, 4], strides=[2, 2],
+                # TODO: check different stride setting
+                tensor = tf.layers.conv2d_transpose(tensor, c, [4, 4],
+                                                    strides=[2, 2] if i != 0 else [4, 4],
                                                     activation=None, padding='SAME')
                 tensor = tf.layers.batch_normalization(tensor, training=is_training)
                 tensor = tf.nn.elu(tensor)
@@ -105,4 +104,3 @@ class ReplaceNet:
 
     def restore(self, sess, path="tmp/paired/"):
         self.saver.restore(sess, path)
-
