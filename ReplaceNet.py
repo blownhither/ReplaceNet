@@ -1,37 +1,39 @@
 import os
-import numpy as np
 import tensorflow as tf
-from matplotlib import pyplot as plt
-import skimage
-from skimage.transform import resize
-
-from load_data import load_parsed_sod
 
 
 class ReplaceNet:
-    def __init__(self, patch_size):
+    """
+    This is a variation of UNet setting from "Deep Image Harmonization"
+    The bottom branch (scene parsing decoder) is not currently included.
+    """
+
+    def __init__(self, patch_size=512, input_img=None, truth_img=None, input_mask=None,
+                 ref_mask=None):
         # hyperparameters
         self.size = patch_size
-        self.down_channels = [32, 64, 128, 256]
-        self.up_channels = [128, 64, 32]
-        # self.down_channels = [32, 64, 128, 256, 512]
-        # self.up_channels = [256, 128, 64, 32]
+        self.down_channels = [64, 64, 128, 128, 256, 256, 512]
+        self.fc_size = 1024
+        self.up_channels = [512, 256, 256, 128, 128, 64, 64]
         self.batch_size = None
         self.lr = 1e-3
 
         # i/o tensors
         # input img should be patches in size 512
-        self.input_img = tf.placeholder(shape=[None, self.size, self.size, 3], dtype=tf.float32)
-        self.truth_img = tf.placeholder(shape=[None, self.size, self.size, 3], dtype=tf.float32)
-        self.truth_mask = tf.placeholder(shape=[None, self.size, self.size], dtype=tf.float32)
+        self.input_img = input_img or tf.placeholder(shape=[None, self.size, self.size, 3],
+                                                     dtype=tf.float32)
+        self.truth_img = truth_img or tf.placeholder(shape=[None, self.size, self.size, 3],
+                                                     dtype=tf.float32)
+        # `input_mask` is applied on `input_img` to locate foreground
+        self.input_mask = input_mask or tf.placeholder(shape=[None, self.size, self.size],
+                                                       dtype=tf.float32)
+        # `ref_mask + input_mask` is the area to apply inpainting
+        self.ref_mask = ref_mask
+
         self.output_img = None
-        self.output_mask = None
-        self.is_training = tf.placeholder_with_default(True, shape=())
 
         # internal tensors, set after building
         self.down_layers = None
-        self.l2_loss = None
-        self.mask_loss = None
         self.loss = None
         self.optimizer = None
         self.train_op = None
@@ -39,21 +41,12 @@ class ReplaceNet:
         self.global_step = None
         self.saver = None
 
-    def build(self, mask_loss_weight=0):
-        self.down_layers, encoder_out = self._build_down(self.input_img)
-        with tf.variable_scope('mask'):
-            output_mask, mask_layers = self._build_up(encoder_out, self.down_layers, 1)
-        with tf.variable_scope('reconstruct'):
-            self.output_img, _ = self._build_up(encoder_out, self.down_layers, 3,
-                                                up_layers_feed=mask_layers)
-        self.output_mask = tf.squeeze(output_mask, axis=3)
+    def build(self, is_training):
+        self.down_layers, encoder_fc = self._build_down(self.input_img, self.input_mask,
+                                                        is_training)
+        self.output_img, up_layers = self._build_up(encoder_fc, self.down_layers, is_training)
 
-        self.l2_loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
-        self.mask_loss = tf.losses.mean_squared_error(self.truth_mask, self.output_mask)
-        self.loss = self.l2_loss + self.mask_loss * mask_loss_weight
-
-        tf.summary.scalar('l2-loss', self.l2_loss)
-        tf.summary.scalar('mask-loss', self.mask_loss)
+        self.loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
         tf.summary.scalar('loss', self.loss)
         self.optimizer = tf.train.AdamOptimizer(self.lr)
 
@@ -65,62 +58,42 @@ class ReplaceNet:
         self.merged_summary = tf.summary.merge_all()
         self.global_step = tf.train.get_or_create_global_step()
 
-    def _build_down(self, img):
+    def _build_down(self, img, mask, is_training):
         # down sampling
         down_layers = []
-        tensor = img
-        for i, c in enumerate(self.down_channels):
-            # TODO: harmonization use 4x4
-            tensor = tf.layers.conv2d(tensor, c, [3, 3], activation=tf.nn.leaky_relu,
-                                      padding='same')
-            # TODO: no normalization?
-            tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
-            # only one conv for the first layer
-            if i != 0:
-                tensor = tf.layers.conv2d(tensor, c, [3, 3], activation=tf.nn.leaky_relu,
-                                          padding='same')  # TODO: no normalization?  # tensor =
-                tf.layers.batch_normalization(tensor, name=f'down_block{i}_out',  #
-                                              training=self.is_training)
-            else:
-                # extra skip connection in the first down layer
-                tensor = tf.concat([tensor, img], axis=3)
-            down_layers.append(tensor)
-            # no shrink for the last layer
-            if i != len(self.down_channels) - 1:
-                # TODO: harmonization use no pooling
-                tensor = tf.layers.max_pooling2d(tensor, [2, 2], [2, 2], padding='same')
-        print('down', down_layers)
-        return down_layers, tensor
+        if len(mask.shape) == 3:  # add 4th dimension
+            mask = tf.expand_dims(mask, 3)
+        with tf.name_scope('encoder'):
+            tensor = tf.concat([img, mask], axis=3)
+            for i, c in enumerate(self.down_channels):
+                tensor = tf.layers.conv2d(tensor, c, [4, 4], strides=(2, 2), activation=None,
+                                          padding='SAME')
+                tensor = tf.layers.batch_normalization(tensor, training=is_training)
+                tensor = tf.nn.elu(tensor)
+                down_layers.append(tensor)
+            print('down', down_layers)
+            tensor = tf.layers.dense(tf.layers.flatten(tensor), self.fc_size, name='out')
+            return down_layers, tensor
 
-    def _build_up(self, img, down_layers, out_channel, up_layers_feed=None):
-        # TODO: harmonization use flatten
+    def _build_up(self, fc, down_layers, is_training):
         up_layers = []
-        tensor = img
-        for i, c in enumerate(self.up_channels):
-            # print('before', tensor)
-            tensor = tf.layers.conv2d_transpose(tensor, c, [3, 3], strides=[2, 2],
-                                                activation=tf.nn.leaky_relu, padding='same')
-            # print('after', tensor, self.down_layers[-(i + 2)])
-            tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
-            tensor = tf.concat([tensor, down_layers[-(i + 2)]], axis=3)
-            tensor = tf.layers.conv2d(tensor, c, [3, 3], activation=tf.nn.leaky_relu,
-                                      padding='same')
-            tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
-            tensor = tf.layers.conv2d(tensor, c, [3, 3], activation=tf.nn.leaky_relu,
-                                      padding='same')
+        with tf.name_scope('h-decoder'):
+            # TODO: cannot use [None, 1, 1, 1024] as in official impl !!!
+            # try stride = 4
+            tensor = tf.reshape(fc, [-1, 2, 2, self.fc_size // 4])
 
-            # harmonization decoder get feeds from scene parsing decoder
-            # if up_layers_feed:
-            #     tensor = tf.concat([tensor, up_layers_feed[i]], axis=3)
-            tensor = tf.layers.batch_normalization(tensor, name=f'up_block{i}_out',
-                                                   training=self.is_training)
-            up_layers.append(tensor)
+            for i, c in enumerate(self.up_channels):
+                # print('before', tensor)
+                tensor = tf.layers.conv2d_transpose(tensor, c, [4, 4], strides=[2, 2],
+                                                    activation=None, padding='SAME')
+                tensor = tf.layers.batch_normalization(tensor, training=is_training)
+                tensor = tf.nn.elu(tensor)
+                tensor = tensor + down_layers[~i]
+                up_layers.append(tensor)
 
-        # print('up', up_layers)
-        tensor = tf.layers.conv2d(tensor, 12, [3, 3], activation=tf.nn.leaky_relu, padding='same')
-        tensor = tf.layers.batch_normalization(tensor, training=self.is_training)
-        output_img = tf.layers.conv2d(tensor, out_channel, [3, 3], activation=tf.nn.sigmoid,
-                                      padding='same', name='reconstructed')
+        print('up', up_layers)
+        output_img = tf.layers.conv2d_transpose(tensor, 3, [4, 4], strides=[2, 2], activation=None,
+                                                padding='SAME')
         return output_img, up_layers
 
     def save(self, sess, path="tmp/paired/", global_step=None):
@@ -133,72 +106,3 @@ class ReplaceNet:
     def restore(self, sess, path="tmp/paired/"):
         self.saver.restore(sess, path)
 
-
-def tweak_foreground(image, mask):
-    """
-    tweak foreground by apply random factor
-    """
-    tweaked = mask_3d * image * np.random.uniform(0.1, 2)
-    new_image = (1 - mask_3d) * image + tweaked
-    new_image *= (1.0/new_image.max())
-    return new_image
-
-
-def train():
-    np.random.seed(0)
-    patch_size = 256
-    batch_size = 8
-
-    images, masks = load_parsed_sod()
-    images = np.array([resize(im, (patch_size, patch_size)) for im in images])
-    masks = np.array(
-        [skimage.img_as_bool(resize(skimage.img_as_float(ms), (patch_size, patch_size))) for ms in
-         masks])
-    sess = tf.Session()
-    net = ParameterizedUNet(patch_size=patch_size)
-    net.build()
-    sess.run(tf.global_variables_initializer())
-
-    for epoch in range(500):
-        out_im = None
-        truth_img = None
-        tweaked = None
-        out_mask = None
-        truth_mask = None
-
-        index = np.arange(len(images))
-        np.random.shuffle(index)
-        for i, batch_index in enumerate(np.array_split(index, len(index) // batch_size)):
-            truth_img = images[batch_index]
-            truth_mask = masks[batch_index]
-            tweaked = [tweak_foreground(im, ms) for im, ms in zip(truth_img, truth_mask)]
-            # TODO: tweaked is in (0, 1) which is good but why
-            _, loss, out_im, out_mask = sess.run(
-                [net.train_op, net.l2_loss, net.output_img, net.output_mask],
-                feed_dict={
-                    net.input_img: tweaked,
-                    net.truth_img: truth_img,
-                    net.truth_mask: truth_mask
-                })
-            print('epoch', epoch, 'batch', i, loss, flush=True)
-        else:
-            plt.subplot(2, 3, 1)
-            plt.imshow(tweaked[0])
-            plt.title('Input')
-            plt.subplot(2, 3, 2)
-            plt.imshow(truth_img[0])
-            plt.title('Truth')
-            plt.subplot(2, 3, 3)
-            plt.imshow(out_im[0])
-            plt.title('out')
-            plt.subplot(2, 3, 5)
-            plt.imshow(truth_mask[0])
-            plt.subplot(2, 3, 6)
-            plt.imshow(out_mask[0])
-            plt.colorbar()
-            plt.savefig(f'tmp/{epoch}.png')
-            plt.close()
-
-
-if __name__ == '__main__':
-    train()
