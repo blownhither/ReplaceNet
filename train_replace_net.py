@@ -25,7 +25,7 @@ def train():
     DATETIME_STR = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
     np.random.seed(0)
     patch_size = 512
-    batch_size = 16
+    batch_size = 2
 
     # load in-memory dataset
     images, masks = load_parsed_sod()
@@ -36,8 +36,7 @@ def train():
 
     # load synthesizer
     synthesizer = Synthesizer()
-    synthesizer.load_model(np.expand_dims(images[0], 0).astype(np.float32))   # provide size hint with image
-    synthesizer.model_should_load = False
+    _ = synthesizer.synthesize(images[0], masks[0], masks[10])   # provide size hint with image
 
     # build our model
     sess = tf.Session()
@@ -59,13 +58,15 @@ def train():
 
         index = np.arange(len(images))
         np.random.shuffle(index)
-        for i, batch_index in enumerate(np.array_split(index, len(index) // batch_size)):
-            truth_img = images[batch_index]
-            truth_mask = masks[batch_index]
+        batch_indices = np.array_split(index, len(index) // batch_size)
+        for i, batch_index in enumerate(batch_indices):
+            truth_img = images[batch_index] # (17, 512, 512, 3), dtype('float64')
+            truth_mask = masks[batch_index] # (17, 512, 512), dtype('bool')
+            reference_mask_index = np.random.randint(0, len(batch_indices))
+            reference_mask = masks[batch_indices[reference_mask_index]]
 
             # apply inpaint
-            flipped_mask = [m[::-1] for m in truth_mask]
-            synthesized = [synthesizer.synthesize(im, ms, ref_ms) for im, ms, ref_ms in zip(truth_img, truth_mask, flipped_mask)]
+            synthesized = np.stack([synthesizer.synthesize(im, ms, ref_ms) for im, ms, ref_ms in zip(truth_img, truth_mask, reference_mask)])
 
             # TODO: tweaked is in (0, 1) which is good but why
             _, loss, out_im, summary, step_val = sess.run(
