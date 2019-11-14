@@ -6,6 +6,7 @@ from load_data import load_parsed_sod
 from matplotlib import pyplot as plt
 from skimage.transform import resize
 import skimage
+from skimage import img_as_ubyte
 
 class Synthesizer:
 
@@ -27,31 +28,41 @@ class Synthesizer:
 
         self.patch_size = patch_size
 
-    def equal_size(self, image):
-        image = resize(skimage.img_as_float(image), (self.patch_size, self.patch_size))
-        return image
+    def resize_image_batch(self, image_batch):
+        for index in range(len(image_batch)):
+            image_batch[index,:,:,:] = resize(image_batch[index,:,:,:], output_shape=(self.patch_size, self.patch_size, 3))
+        return image_batch
+
+    def resize_mask_batch(self, mask_batch):
+        for index in range(len(mask_batch)):
+            mask_batch[index,:,:] = resize(mask_batch[index,:,:], output_shape=(self.patch_size, self.patch_size))
+        return mask_batch
 
     def get_background(self, image, mask, reference_mask):
-        # image is ground_truth_image
-        merged_mask = mask + reference_mask
+        merged_mask = mask + reference_mask # (17, 512, 512)
 
-        mask_3d = np.zeros((merged_mask.shape[0], merged_mask.shape[1], 3))
-        mask_3d[:,:,0] = merged_mask
-        mask_3d[:,:,1] = merged_mask
-        mask_3d[:,:,2] = merged_mask
-        mask_3d = mask_3d * 255
-        mask_3d = mask_3d.astype(np.float32)
-        image = image.astype(np.float32)
+        mask_3d = np.zeros((merged_mask.shape[0], merged_mask.shape[1], merged_mask.shape[2], 3)) # (17, 512, 512, 3)
+        mask_3d[:, :, :, 0] = merged_mask
+        mask_3d[:, :, :, 1] = merged_mask
+        mask_3d[:, :, :, 2] = merged_mask
+        mask_3d = mask_3d * 255 
+        mask_3d = mask_3d.astype(np.uint8)
 
-        h, w, _ = image.shape
+        image = img_as_ubyte(image)
+        #image = image * 255
+        #image = skimage.img_as_ubyte(image)‎
+        #mask_3d = mask_3d.astype(np.float32)
+        #image = image.astype(np.uint8).astype(np.float32)
+        #image = image.astype(np.float32)
+
+        _,h,w,_ = image.shape
         grid = 8
-        image = image[:h//grid*grid, :w//grid*grid, :]
-        mask_3d = mask_3d[:h//grid*grid, :w//grid*grid, :]
+        image = image[:,:h//grid*grid, :w//grid*grid, :]
+        mask_3d = mask_3d[:, :h//grid*grid, :w//grid*grid, :]
 
-        image = np.expand_dims(image, 0)
-        mask_3d = np.expand_dims(mask_3d, 0)
-        input_image = np.concatenate([image, mask_3d], axis=2)
-
+        
+        input_image = np.concatenate([image, mask_3d], axis=2) # (17, 512, 1024, 3)
+        input_image = input_image.astype(np.float32)
         if self.model_should_load:
             self.model_should_load = False
             res = self.load_model(input_image)
@@ -66,7 +77,8 @@ class Synthesizer:
         output = tf.reverse(output, [-1])
         output = tf.saturate_cast(output, tf.uint8)
         result = self.sess.run(output)
-        return result[0][:, :, ::-1]
+        # return result[:][:, :, ::-1]
+        return result
 
 
     def tweak_foreground(self, image):
@@ -79,23 +91,24 @@ class Synthesizer:
         return new_image
 
     def synthesize(self, image, mask, reference_mask):
-        image = self.equal_size(image)
-        mask = skimage.img_as_bool(self.equal_size(mask))
-        reference_mask = skimage.img_as_bool(self.equal_size(reference_mask))
+        image = self.resize_image_batch(image) # (2, 512, 512, 3)
+        mask = self.resize_mask_batch(mask) # (2, 512, 512)
+        reference_mask = self.resize_mask_batch(reference_mask) # (2, 512, 512)
 
         inpainted_background_image = self.get_background(image, mask, reference_mask)
-        inpainted_background_image = resize(inpainted_background_image,(self.patch_size, self.patch_size))
+        #inpainted_background_image = resize(inpainted_background_image,(self.patch_size, self.patch_size))
 
         background_image = inpainted_background_image.copy()
-        background_image[mask==True] = (0, 0, 0)
+        background_image[mask==True, :] = (0, 0, 0)
 
         foreground_object = image.copy()
-        foreground_object[mask==False] = (0, 0, 0)
+        foreground_object[mask==False, :] = (0, 0, 0)
         foreground_object = self.tweak_foreground(foreground_object)
 
         background_image = background_image / 255.0
         synthesized_image = background_image + foreground_object
 
+        
         return synthesized_image
             
 
@@ -115,4 +128,5 @@ class Synthesizer:
 
         _ = self.sess.run(assign_ops)
         result = self.sess.run(output)
-        return result[0][:, :, ::-1]
+        # return result[:][:, :, ::-1]
+        return result
