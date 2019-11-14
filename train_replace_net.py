@@ -9,6 +9,9 @@ from load_data import load_parsed_sod
 from ReplaceNet import ReplaceNet
 from synthesize import Synthesizer
 
+import logging
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+
 
 def tweak_foreground(image, mask):
     """
@@ -74,7 +77,8 @@ def train():
                 feed_dict={net.input_img: synthesized, net.input_mask: truth_mask,
                            net.truth_img: truth_img})
             train_summary_writer.add_summary(summary, global_step=step_val)
-            print('epoch', epoch, 'batch', i, loss, flush=True)
+            #print('epoch', epoch, 'batch', i, loss, flush=True)
+            logging.error('epoch: ' + str(epoch) +  ' batch: ' +  str(i) +  ' Loss: ' + str(loss) )
 
         else:
             plt.subplot(2, 3, 1)
