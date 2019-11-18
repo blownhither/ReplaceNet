@@ -28,6 +28,9 @@ class Synthesizer:
 
         self.patch_size = patch_size
 
+        self._inpaint_input_placeholder = None
+        self._cached_inpaint_output = None
+
     def resize_image(self, image):
         image = resize(image, output_shape=(self.patch_size, self.patch_size, 3))
         return image
@@ -67,11 +70,18 @@ class Synthesizer:
             return res
 
     def inpaint(self, input_image):
-        output = self.model.build_server_graph(self.FLAGS, input_image, reuse=True)
-        output = (output + 1.) * 127.5
-        output = tf.reverse(output, [-1])
-        output = tf.saturate_cast(output, tf.uint8)
-        result = self.sess.run(output)
+        if self._cached_inpaint_output is None:
+            self._inpaint_input_placeholder = tf.placeholder(shape=input_image.shape, dtype=tf.float32)
+            output = self.model.build_server_graph(self.FLAGS, self._inpaint_input_placeholder, reuse=True)
+            output = (output + 1.) * 127.5
+            output = tf.reverse(output, [-1])
+            output = tf.saturate_cast(output, tf.uint8)
+            self._cached_inpaint_output = output
+        else:
+            output = self._cached_inpaint_output
+        result = self.sess.run(output, feed_dict={
+            self._inpaint_input_placeholder: input_image
+        })
         return result[0][:, :, ::-1]
 
 
