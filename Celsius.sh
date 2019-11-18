@@ -6,7 +6,7 @@ MACHINE="martin@alchemist.smn.cs.brown.edu";
 REMOTE_DIR="/home/martin/projects/replaceNet";
 REMOTE_PY="/home/martin/anaconda3/bin/python3"
 
-scp *.py *.yml "$MACHINE:$REMOTE_DIR"
+scp *.py *.yml *.yaml "$MACHINE:$REMOTE_DIR"
 
 #scp -r "$(pwd)/model_logs" "$MACHINE:$REMOTE_DIR"
 

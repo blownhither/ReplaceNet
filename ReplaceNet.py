@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import tensorflow as tf
 
 
@@ -8,12 +9,16 @@ class ReplaceNet:
     The bottom branch (scene parsing decoder) is not currently included.
     """
 
-    def __init__(self, patch_size=512, input_img=None, truth_img=None, input_mask=None,
-                 ref_mask=None):
-        # hyperparameters
+    def __init__(self, patch_size=512, skip_connection="add", input_img=None, truth_img=None,
+                 input_mask=None, ref_mask=None):
+        """
+        :param skip_connection: concat | add
+        """
+        # hyper parameters
         self.size = patch_size
+        self.skip_connection = skip_connection
         self.down_channels = [64, 64, 128, 128, 256, 256, 512]
-        self.fc_size = 1024
+        # self.fc_size = 1024       # NOTE: static fc_size is deprecated, uses a 0.5x bottleneck
         self.up_channels = [512, 256, 256, 128, 128, 64, 64]
         self.batch_size = None
         self.lr = 1e-3
@@ -72,22 +77,37 @@ class ReplaceNet:
                 tensor = tf.nn.elu(tensor)
                 down_layers.append(tensor)
             print('down', down_layers)
-            tensor = tf.layers.dense(tf.layers.flatten(tensor), self.fc_size, name='out')
+
+            # Add a 0.5x FC bottle neck, this enables flexible patch size.
+            size = np.prod(tensor.get_shape().as_list()[1:])
+            tensor = tf.layers.dense(tf.layers.flatten(tensor), size // 2, name='bottleneck')
+            tensor = tf.layers.batch_normalization(tensor, training=is_training)
+            tensor = tf.nn.elu(tensor)
+
             return down_layers, tensor
 
     def _build_up(self, fc, down_layers, is_training):
         up_layers = []
         with tf.name_scope('h-decoder'):
-            tensor = tf.reshape(fc, [-1, 1, 1, self.fc_size])
+            # Recover from the 0.5x FC bottle neck with another FC
+            last_block_shape = down_layers[-1].get_shape().as_list()[1:]
+            size = np.prod(last_block_shape)
+            tensor = tf.layers.dense(fc, size // 4, name='out')
+            tensor = tf.layers.batch_normalization(tensor, training=is_training)
+            tensor = tf.nn.elu(tensor)
+            tensor = tf.reshape(tensor, [-1, last_block_shape[0] // 2, last_block_shape[1] // 2,
+                                         last_block_shape[2]])
 
             for i, c in enumerate(self.up_channels):
                 # TODO: check different stride setting
-                tensor = tf.layers.conv2d_transpose(tensor, c, [4, 4],
-                                                    strides=[2, 2] if i != 0 else [4, 4],
+                tensor = tf.layers.conv2d_transpose(tensor, c, [4, 4], strides=[2, 2],
                                                     activation=None, padding='SAME')
                 tensor = tf.layers.batch_normalization(tensor, training=is_training)
                 tensor = tf.nn.elu(tensor)
-                tensor = tensor + down_layers[~i]
+                if self.skip_connection == "add":
+                    tensor = tensor + down_layers[~i]
+                elif self.skip_connection == "concat":
+                    tensor = tf.concat([tensor, down_layers[~i]], axis=3)
                 up_layers.append(tensor)
 
         print('up', up_layers)
