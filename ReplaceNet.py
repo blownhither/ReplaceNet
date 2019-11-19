@@ -111,8 +111,14 @@ class ReplaceNet:
                 up_layers.append(tensor)
 
         print('up', up_layers)
-        output_img = tf.layers.conv2d_transpose(tensor, 3, [4, 4], strides=[2, 2], activation=None,
-                                                padding='SAME')
+        tensor = tf.layers.conv2d_transpose(tensor, 3, [4, 4], strides=[2, 2], activation=None,
+                                            padding='SAME')
+
+        # the two lines below are not in the original paper, they may fix checkerboard
+        tensor = tf.nn.elu(tf.layers.batch_normalization(tensor))
+        output_img = tf.layers.conv2d(tensor, 3, [4, 4], strides=[1, 1], padding='SAME',
+                                      activation=tf.nn.softmax)
+
         return output_img, up_layers
 
     def save(self, sess, path="tmp/paired/", global_step=None):
