@@ -30,7 +30,7 @@ class ReplaceNet:
         self.truth_img = truth_img or tf.placeholder(shape=[None, self.size, self.size, 3],
                                                      dtype=tf.float32)
         # `input_mask` is applied on `input_img` to locate foreground
-        self.input_mask = input_mask or tf.placeholder(shape=[None, self.size, self.size],
+        self.input_mask = input_mask or tf.placeholder(shape=[None, self.size, self.size, 3],
                                                        dtype=tf.float32)
         # `ref_mask + input_mask` is the area to apply inpainting
         self.ref_mask = ref_mask
@@ -66,8 +66,8 @@ class ReplaceNet:
     def _build_down(self, img, mask, is_training):
         # down sampling
         down_layers = []
-        if len(mask.shape) == 3:  # add 4th dimension
-            mask = tf.expand_dims(mask, 3)
+        # if len(mask.shape) == 3:  # add 4th dimension
+        #     mask = tf.expand_dims(mask, 3)
         with tf.name_scope('encoder'):
             tensor = tf.concat([img, mask], axis=3)
             for i, c in enumerate(self.down_channels):
@@ -111,13 +111,13 @@ class ReplaceNet:
                 up_layers.append(tensor)
 
         print('up', up_layers)
-        tensor = tf.layers.conv2d_transpose(tensor, 3, [4, 4], strides=[2, 2], activation=None,
+        tensor = tf.layers.conv2d_transpose(tensor, 32, [4, 4], strides=[2, 2], activation=None,
                                             padding='SAME')
 
         # the two lines below are not in the original paper, they may fix checkerboard
         tensor = tf.nn.elu(tf.layers.batch_normalization(tensor))
         output_img = tf.layers.conv2d(tensor, 3, [4, 4], strides=[1, 1], padding='SAME',
-                                      activation=tf.nn.softmax)
+                                      activation=tf.nn.sigmoid)
 
         return output_img, up_layers
 

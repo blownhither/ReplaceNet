@@ -79,11 +79,19 @@ def train():
             synthesized = np.stack([synthesizer.synthesize(im, ms, ref_ms) for im, ms, ref_ms in
                                     zip(truth_img, truth_mask, reference_mask)])
 
-            # TODO: tweaked is in (0, 1) which is good but why
+            # print("???", reference_mask.shape)
+            # print("???", (truth_mask + reference_mask).shape)
+            # exit()
+
             _, loss, out_im, summary, step_val = sess.run(
                 [net.train_op, net.loss, net.output_img, net.merged_summary, net.global_step],
-                feed_dict={net.input_img: synthesized, net.input_mask: truth_mask + reference_mask,
-                           net.truth_img: truth_img})
+                feed_dict={
+                    net.input_img: synthesized,
+                    net.input_mask: np.stack(
+                        (truth_mask,
+                         reference_mask,
+                         truth_mask + reference_mask), axis=3),
+                    net.truth_img: truth_img})
             train_summary_writer.add_summary(summary, global_step=step_val)
 
             logger.error('epoch: ' + str(epoch) + ' batch: ' + str(i) + ' Loss: ' + str(loss))
