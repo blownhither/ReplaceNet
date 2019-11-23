@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 from load_data import load_parsed_sod
 from ReplaceNet import ReplaceNet
 from synthesize import Synthesizer
+from tweak import align_mask
 
 
 DATETIME_STR = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
@@ -64,6 +65,7 @@ def train():
         truth_img = None
         synthesized = None
         truth_mask = None
+        reference_mask = None
         epoch_loss = []
 
         index = np.arange(len(images))
@@ -74,14 +76,12 @@ def train():
             truth_mask = masks[batch_index]
             reference_mask_indices = np.random.choice(range(len(images)), len(truth_img))
             reference_mask = masks[reference_mask_indices]
+            # align with current mask
+            reference_mask = [align_mask(m, r) for m, r in zip(truth_mask, reference_mask)]
 
             # apply inpaint
             synthesized = np.stack([synthesizer.synthesize(im, ms, ref_ms) for im, ms, ref_ms in
                                     zip(truth_img, truth_mask, reference_mask)])
-
-            # print("???", reference_mask.shape)
-            # print("???", (truth_mask + reference_mask).shape)
-            # exit()
 
             _, loss, out_im, summary, step_val = sess.run(
                 [net.train_op, net.loss, net.output_img, net.merged_summary, net.global_step],
@@ -90,7 +90,7 @@ def train():
                     net.input_mask: np.stack(
                         (truth_mask,
                          reference_mask,
-                         truth_mask + reference_mask), axis=3),
+                         reference_mask - truth_mask), axis=3),
                     net.truth_img: truth_img})
             train_summary_writer.add_summary(summary, global_step=step_val)
 
@@ -108,6 +108,8 @@ def train():
             plt.title('out')
             plt.subplot(2, 3, 5)
             plt.imshow(truth_mask[0])
+            plt.subplot(2, 3, 6)
+            plt.imshow(reference_mask[0])
             plt.savefig(f'tmp/{epoch}.png')
             plt.close()
         print()
