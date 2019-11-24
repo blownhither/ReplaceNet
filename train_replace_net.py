@@ -83,7 +83,7 @@ def train():
                     net.truth_img: truth_img})
             train_summary_writer.add_summary(summary, global_step=step_val)
 
-            logger.error('epoch: ' + str(epoch) + ' batch: ' + str(i) + ' Loss: ' + str(loss))
+            logger.error('epoch: ' + str(epoch) + ' batch: ' + str(batch) + ' Loss: ' + str(loss))
             epoch_loss.append(loss)
         else:
             plt.subplot(2, 3, 1)
