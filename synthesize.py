@@ -46,6 +46,10 @@ class Synthesizer:
 
         _ = self.sess.run(assign_ops)
 
+    def resize_image(self, image):
+        image = resize(image, output_shape=(self.patch_size, self.patch_size, 3))
+        return image
+
     def get_background(self, image, mask, reference_mask):
         # image is ground_truth_image
         merged_mask = mask + reference_mask
