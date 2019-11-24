@@ -20,16 +20,31 @@ class Synthesizer:
         self.model = InpaintCAModel()
         self.checkpoint_dir = saved_model_path
 
-        self.sess_config = tf.ConfigProto()
-        self.sess_config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config= self.sess_config)
-
-        self.model_should_load = True
-
         self.patch_size = patch_size
 
-        self._inpaint_input_placeholder = None
-        self._cached_inpaint_output = None
+        self.sess_config = tf.ConfigProto()
+        self.sess_config.gpu_options.allow_growth = True
+        self._inpaint_input_placeholder = tf.placeholder(shape=(1, self.patch_size, self.patch_size*2, 3), dtype=tf.float32)
+        self.sess = tf.Session(config= self.sess_config)
+
+        output = self.model.build_server_graph(self.FLAGS, self._inpaint_input_placeholder, reuse=tf.AUTO_REUSE)
+        output = (output + 1.) * 127.5
+        output = tf.reverse(output, [-1])
+        output = tf.saturate_cast(output, tf.uint8)
+        self._cached_inpaint_output = output
+
+        self.load_model()
+
+    def load_model(self):
+        vars_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        assign_ops = []
+        for var in vars_list:
+            vname = var.name
+            from_name = vname
+            var_value = tf.contrib.framework.load_variable(self.checkpoint_dir, from_name)
+            assign_ops.append(tf.assign(var, var_value))
+
+        _ = self.sess.run(assign_ops)
 
     def resize_image(self, image):
         image = resize(image, output_shape=(self.patch_size, self.patch_size, 3))
@@ -61,25 +76,11 @@ class Synthesizer:
         input_image = np.concatenate([image, mask_3d], axis=2)
         input_image = input_image.astype(np.float32)
         
-        if self.model_should_load:
-            self.model_should_load = False
-            res = self.load_model(input_image)
-            return res
-        else:
-            res= self.inpaint(input_image)
-            return res
+        res= self.inpaint(input_image)
+        return res
 
     def inpaint(self, input_image):
-        if self._cached_inpaint_output is None:
-            self._inpaint_input_placeholder = tf.placeholder(shape=input_image.shape, dtype=tf.float32)
-            output = self.model.build_server_graph(self.FLAGS, self._inpaint_input_placeholder, reuse=True)
-            output = (output + 1.) * 127.5
-            output = tf.reverse(output, [-1])
-            output = tf.saturate_cast(output, tf.uint8)
-            self._cached_inpaint_output = output
-        else:
-            output = self._cached_inpaint_output
-        result = self.sess.run(output, feed_dict={
+        result = self.sess.run(self._cached_inpaint_output, feed_dict={
             self._inpaint_input_placeholder: input_image
         })
         return result[0][:, :, ::-1]
@@ -113,22 +114,3 @@ class Synthesizer:
         synthesized_image = background_image + foreground_object
 
         return synthesized_image
-            
-
-    def load_model(self, input_image):
-        output = self.model.build_server_graph(self.FLAGS, input_image)
-        output = (output + 1.) * 127.5
-        output = tf.reverse(output, [-1])
-        output = tf.saturate_cast(output, tf.uint8)
-
-        vars_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-        assign_ops = []
-        for var in vars_list:
-            vname = var.name
-            from_name = vname
-            var_value = tf.contrib.framework.load_variable(self.checkpoint_dir, from_name)
-            assign_ops.append(tf.assign(var, var_value))
-
-        _ = self.sess.run(assign_ops)
-        result = self.sess.run(output)
-        return result[0][:, :, ::-1]
