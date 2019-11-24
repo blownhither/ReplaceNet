@@ -5,14 +5,14 @@ import logging
 import datetime
 import numpy as np
 import tensorflow as tf
+import cv2
 from skimage.transform import resize
 from matplotlib import pyplot as plt
 
-from load_data import load_parsed_sod
+from load_data import *
 from ReplaceNet import ReplaceNet
 from synthesize import Synthesizer
 from tweak import align_mask
-
 
 DATETIME_STR = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
@@ -21,18 +21,6 @@ logger.setLevel(level=logging.INFO)
 logger.addHandler(logging.FileHandler('tmp/train_replace_net' + '-' + DATETIME_STR + '.log'))
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
-
-def tweak_foreground(image, mask):
-    """
-    tweak foreground by apply random factor
-    """
-    mask_3d = np.expand_dims(mask, 2)
-    foreground = mask_3d * image * np.random.uniform(0.1, 2)
-    new_image = (1 - mask_3d) * image + foreground
-    new_image = np.clip(new_image, 0, 1)
-    return new_image
-
-
 def train():
     config = yaml.load(open('train.yaml', 'r'), Loader=yaml.CLoader)
     logger.info(config)
@@ -40,17 +28,15 @@ def train():
     np.random.seed(0)
     patch_size = config['patch_size']
     batch_size = config['batch_size']
-
+    dataset_size = get_dataset_size()
+    
     # load in-memory dataset
-    images, masks = load_parsed_sod()
-    images = np.array([resize(im, (patch_size, patch_size)) for im in images])
-    masks = np.array(
-        [skimage.img_as_bool(resize(skimage.img_as_float(ms), (patch_size, patch_size))) for ms in
-         masks])
+    dataset = tf.data.Dataset.from_generator(load_larger_dataset, (tf.int64, tf.int64, tf.int64))
+    it = dataset.make_initializable_iterator()
+    nxt = it.get_next()
 
     # load synthesizer
     synthesizer = Synthesizer(patch_size=patch_size)
-    _ = synthesizer.synthesize(images[0], masks[0], masks[10])  # provide size hint with image
 
     # build our model
     sess = tf.Session()
@@ -61,21 +47,24 @@ def train():
     sess.run(tf.global_variables_initializer())
 
     for epoch in range(500):
-        out_im = None
-        truth_img = None
-        synthesized = None
-        truth_mask = None
-        reference_mask = None
+        sess.run(it.initializer)
         epoch_loss = []
 
-        index = np.arange(len(images))
-        np.random.shuffle(index)
-        batch_indices = np.array_split(index, len(index) // batch_size)
-        for i, batch_index in enumerate(batch_indices):
-            truth_img = images[batch_index]
-            truth_mask = masks[batch_index]
-            reference_mask_indices = np.random.choice(range(len(images)), len(truth_img))
-            reference_mask = masks[reference_mask_indices]
+        for batch in range(dataset_size // batch_size):
+            images = []
+            truth_masks = []
+            reference_masks = []
+            
+            for _ in range(batch_size):
+                image, truth_mask, reference_mask = sess.run(nxt) # Lazily load
+                images.append(cv2.resize(image/255.0,(patch_size, patch_size))) # int64 -> float64
+                truth_masks.append((cv2.resize(truth_mask/255.0,(patch_size, patch_size))) > 0.0)
+                reference_masks.append((cv2.resize(reference_mask/255.0,(patch_size, patch_size)) > 0.0))
+                
+            truth_img = np.stack(images)
+            truth_mask = np.stack(truth_masks)
+            reference_mask = np.stack(reference_masks)
+            
             # align with current mask
             reference_mask = [align_mask(m, r) for m, r in zip(truth_mask, reference_mask)]
 
