@@ -72,8 +72,8 @@ def train():
             synthesized = np.stack([synthesizer.synthesize(im, ms, ref_ms) for im, ms, ref_ms in
                                     zip(truth_img, truth_mask, reference_mask)])
 
-            _, loss, out_im, summary, step_val = sess.run(
-                [net.train_op, net.loss, net.output_img, net.merged_summary, net.global_step],
+            _, loss, elpips_loss, out_im, summary, step_val = sess.run(
+                [net.train_op, net.loss, net.elpips_distance, net.output_img, net.merged_summary, net.global_step],
                 feed_dict={
                     net.input_img: synthesized,
                     net.input_mask: np.stack(
@@ -83,7 +83,7 @@ def train():
                     net.truth_img: truth_img})
             train_summary_writer.add_summary(summary, global_step=step_val)
 
-            logger.error('epoch: ' + str(epoch) + ' batch: ' + str(batch) + ' Loss: ' + str(loss))
+            logger.error('epoch: ' + str(epoch) + ' batch: ' + str(batch) + ' Loss: ' + str(loss) + ' elpips: ' + str(elpips_loss))
             epoch_loss.append(loss)
         else:
             plt.subplot(2, 3, 1)

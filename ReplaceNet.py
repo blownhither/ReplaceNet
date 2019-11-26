@@ -1,6 +1,9 @@
 import os
 import numpy as np
 import tensorflow as tf
+import sys
+sys.path.append('../elpips') # clone repo  : https://github.com/mkettune/elpips
+import elpips
 
 
 class ReplaceNet:
@@ -36,6 +39,7 @@ class ReplaceNet:
         self.ref_mask = ref_mask
 
         self.output_img = None
+        self.metric = elpips.Metric(elpips.elpips_vgg(batch_size=1, n=1), back_prop=False)
 
         # internal tensors, set after building
         self.down_layers = None
@@ -53,11 +57,12 @@ class ReplaceNet:
 
         self.loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
         tf.summary.scalar('loss', self.loss)
+        self.elpips_distance = self.metric.forward(self.truth_img, self.output_img)[0]
         self.optimizer = tf.train.AdamOptimizer(self.lr)
 
         # for Batch Norm update
         update_ops = tf.compat.v1.get_collection(tf.GraphKeys.UPDATE_OPS)
-        train_op = self.optimizer.minimize(self.loss,
+        train_op = self.optimizer.minimize(self.loss + self.elpips_distance,
                                            global_step=tf.train.get_or_create_global_step())
         self.train_op = tf.group([train_op, update_ops])
         self.merged_summary = tf.summary.merge_all()
