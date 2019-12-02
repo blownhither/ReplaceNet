@@ -3,27 +3,28 @@ from pathlib import Path
 from scipy.io import loadmat
 from skimage.io import imread
 from skimage.draw import line, polygon
+from random import shuffle
 import pprint
 import os
 from matplotlib import pyplot as plt
 import tensorflow as tf
 
 def load_larger_dataset():
-    graph = tf.Graph()
-    with graph.as_default():
-        dataset_path = ''
-        imgs_list = os.listdir(dataset_path + '/img')
-        for index in range(len(imgs_list)):
-            img_id = imgs_list[index].split('.')[0]
-            ref_mask_index = np.random.randint(0,len(imgs_list))
-            ref_mask_id = imgs_list[ref_mask_index].split('.')[0]
-            image = np.array(imread(dataset_path + '/img/' +img_id+'.jpg'))
-            mask = np.load(dataset_path + '/bool_mask/'+img_id+'.npy')
-            ref_mask = np.load(dataset_path + '/bool_mask/'+ref_mask_id+'.npy')
-            yield image, mask, ref_mask
+    dataset_path = 'image_data'
+    imgs_list = os.listdir(dataset_path + '/img')
+    indices = list(range(len(imgs_list)))
+    shuffle(indices)
+    for index in indices:
+        img_id = imgs_list[index].split('.')[0]
+        ref_mask_index = np.random.randint(0,len(imgs_list))
+        ref_mask_id = imgs_list[ref_mask_index].split('.')[0]
+        image = np.array(imread(dataset_path + '/img/' +img_id+'.jpg'))
+        mask = np.load(dataset_path + '/bool_mask/'+img_id+'.npy')
+        ref_mask = np.load(dataset_path + '/bool_mask/'+ref_mask_id+'.npy')
+        yield image, mask, ref_mask
 
 def get_dataset_size():
-    dataset_path = ''
+    dataset_path = 'image_data'
     imgs_list = os.listdir(dataset_path + '/img')
     return len(imgs_list)
 

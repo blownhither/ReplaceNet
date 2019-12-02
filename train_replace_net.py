@@ -46,11 +46,13 @@ def train():
     train_summary_writer = tf.summary.FileWriter(f'tmp/summary/summary-{DATETIME_STR}', sess.graph)
     sess.run(tf.global_variables_initializer())
 
+    saver = tf.train.Saver()
+
     for epoch in range(500):
         sess.run(it.initializer)
         epoch_loss = []
 
-        for batch in range(dataset_size // batch_size):
+        for batch in range((dataset_size // batch_size)-1):
             images = []
             truth_masks = []
             reference_masks = []
@@ -99,8 +101,10 @@ def train():
             plt.imshow(truth_mask[0])
             plt.subplot(2, 3, 6)
             plt.imshow(reference_mask[0])
-            plt.savefig(f'tmp/{epoch}.png')
+            plt.savefig(f'tmp/{epoch}_'+DATETIME_STR+'.png')
             plt.close()
+
+        saver.save(sess, 'tmp/model_'+DATETIME_STR)
         print()
 
 
