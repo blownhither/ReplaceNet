@@ -22,7 +22,11 @@ logger.addHandler(logging.FileHandler('tmp/train_replace_net' + '-' + DATETIME_S
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 def train():
-    config = yaml.load(open('train.yaml', 'r'), Loader=yaml.CLoader)
+    config = dict()
+    config['batch_size'] = 1
+    config['patch_size'] = 256
+    config['skip_connection'] = 'concat'
+
     logger.info(config)
 
     np.random.seed(0)
@@ -88,6 +92,7 @@ def train():
             logger.error('epoch: ' + str(epoch) + ' batch: ' + str(batch) + ' Loss: ' + str(loss) + ' elpips: ' + str(elpips_loss))
             epoch_loss.append(loss)
         else:
+            saver.save(sess, 'tmp/model' + '-' + DATETIME_STR+ '/model')
             plt.subplot(2, 3, 1)
             plt.imshow(synthesized[0])
             plt.title('Input')
@@ -101,12 +106,9 @@ def train():
             plt.imshow(truth_mask[0])
             plt.subplot(2, 3, 6)
             plt.imshow(reference_mask[0])
-            plt.savefig(f'tmp/{epoch}_'+DATETIME_STR+'.png')
+            plt.savefig(f'tmp/model' + '-' + DATETIME_STR + '/'+str(epoch)+'.png')
             plt.close()
-
-        saver.save(sess, 'tmp/model_'+DATETIME_STR)
         print()
-
 
 if __name__ == '__main__':
     train()
