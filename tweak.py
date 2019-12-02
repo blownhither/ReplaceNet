@@ -20,6 +20,17 @@ def align_mask(anchor, movable):
     return out
 
 
+def align_image(anchor_mask, movable_mask, movable_image):
+    center_anchor = get_mask_center(anchor_mask)
+    center_movable = get_mask_center(movable_mask)
+    diff = center_movable - center_anchor
+    # image coordinates use (col, row) order
+    diff = diff[::-1]
+    result_mask = warp(movable_mask, AffineTransform(translation=diff))
+    result_image = warp(movable_image, AffineTransform(translation=diff))
+    return result_mask, result_image
+
+
 def test_align_mask():
     from load_data import load_parsed_sod
     from matplotlib import pyplot as plt

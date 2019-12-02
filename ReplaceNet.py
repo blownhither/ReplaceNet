@@ -58,6 +58,7 @@ class ReplaceNet:
         self.loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
         tf.summary.scalar('loss', self.loss)
         self.elpips_distance = self.metric.forward(self.truth_img, self.output_img)[0]
+        tf.summary.scalar('elpips', self.elpips_distance)
         self.optimizer = tf.train.AdamOptimizer(self.lr)
 
         # for Batch Norm update
