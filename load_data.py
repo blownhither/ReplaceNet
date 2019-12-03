@@ -42,7 +42,7 @@ def load_large_dataset_with_class(patch_size=None, align=False):
     If align is True, `align_mask` is called to move the ref mask to the center fo the mask
 
     Prepare:
-        Unarchieve bool_mask_sep_cls, img, cls_mask_dict.npy into `image_data/`
+        Unarchieve bool_mask_sep_inst, img into `image_data/`
 
     Yield:
         (an image, mask of ONE object in the image, a random ref mask)
@@ -56,7 +56,7 @@ def load_large_dataset_with_class(patch_size=None, align=False):
         random.shuffle(imgs_list)
 
         # gather all corresponding masks for each image
-        all_masks_files = glob.glob(dataset_path + '/bool_mask_sep_cls/*.npy')
+        all_masks_files = glob.glob(dataset_path + '/bool_mask_sep_inst/*.npy')
         image_to_masks = defaultdict(list)
         for x in all_masks_files:
             x = os.path.basename(x)
@@ -70,7 +70,7 @@ def load_large_dataset_with_class(patch_size=None, align=False):
             ref_mask_path = random.choice(all_masks_files)
 
             image = skimage.img_as_float(imread(dataset_path + '/img/' + image_id + '.jpg'))
-            mask = np.load(dataset_path + '/bool_mask_sep_cls/' + mask_base)
+            mask = np.load(dataset_path + '/bool_mask_sep_inst/' + mask_base)
             ref_mask = np.load(ref_mask_path)
 
             if patch_size is not None:

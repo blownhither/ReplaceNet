@@ -11,6 +11,7 @@ scp *.py *.yml *.yaml "$MACHINE:$REMOTE_DIR"
 #scp -r "$(pwd)/model_logs" "$MACHINE:$REMOTE_DIR"
 #scp -r "$(pwd)/image_data" "$MACHINE:$REMOTE_DIR"
 #scp -r "$HOME/projects/elpips" "$MACHINE:$REMOTE_DIR"
+#scp "image_data/bool_mask_sep_inst.zip" "$MACHINE:$REMOTE_DIR/image_data"
 
 ssh "$MACHINE" "screen -S replaceNet -dm bash -c 'cd $REMOTE_DIR; $REMOTE_PY train_replace_net.py 2>&1 | tee rawT.log' "
 
