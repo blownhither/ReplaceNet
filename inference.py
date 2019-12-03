@@ -49,12 +49,12 @@ class InferenceHelper:
 
         # TODO: has to have ref mask? Use zero mask now
         inpainted_bg = self.synthesizer.get_background(bg_image, bg_mask,
-                                                   np.zeros_like(bg_mask, dtype=np.bool))
+                                                       np.zeros_like(bg_mask, dtype=np.bool))
         if align_mask:
             fg_mask, fg_image = align_image(anchor_mask=bg_mask, movable_mask=fg_mask,
                                             movable_image=fg_image)
         # synthesized = inpainted_bg + np.expand_dims(fg_mask, 2) * fg_image
-        synthesized = inpainted_bg.copy()
+        synthesized = skimage.img_as_float(inpainted_bg.copy())
         synthesized[fg_mask.astype(np.bool)] = fg_image[fg_mask.astype(np.bool)]
 
         out_image = self.sess.run(self.net.output_img, feed_dict={
@@ -67,32 +67,36 @@ class InferenceHelper:
 def test():
     from matplotlib import pyplot as plt
     from load_data import load_parsed_sod
+    np.random.seed(0)
 
     images, masks = load_parsed_sod()
-    fg_choice = 0
-    bg_choice = 1
-
-    model_path = 'tmp/new_model/model_20191202151110'
+    model_path = 'tmp/model-20191202162813/model'
     inf = InferenceHelper(model_path)
-    synthesized, out = inf.replace(images[fg_choice], masks[fg_choice],
-                                   images[bg_choice], masks[bg_choice])
-    plt.subplot(2, 6, 1)
-    plt.imshow(images[fg_choice])
-    plt.title('Foreground')
-    plt.subplot(2, 6, 2)
-    plt.imshow(masks[fg_choice])
-    plt.subplot(2, 6, 7)
-    plt.imshow(images[bg_choice])
-    plt.title('Background')
-    plt.subplot(2, 6, 8)
-    plt.imshow(masks[bg_choice])
-    plt.subplot(1, 3, 2)
-    plt.imshow(synthesized)
-    plt.title('Synthesized')
-    plt.subplot(1, 3, 3)
-    plt.imshow(out)
-    plt.title('out')
-    plt.show()
+
+    for i in range(10):
+        fg_choice = np.random.randint(9, len(images))
+        bg_choice = np.random.randint(9, len(images))
+        synthesized, out = inf.replace(images[fg_choice], masks[fg_choice],
+                                       images[bg_choice], masks[bg_choice])
+        plt.figure(figsize=(16, 8))
+        plt.subplot(2, 6, 1)
+        plt.imshow(images[fg_choice])
+        plt.title('Foreground')
+        plt.subplot(2, 6, 2)
+        plt.imshow(masks[fg_choice])
+        plt.subplot(2, 6, 7)
+        plt.imshow(images[bg_choice])
+        plt.title('Background')
+        plt.subplot(2, 6, 8)
+        plt.imshow(masks[bg_choice])
+        plt.subplot(1, 3, 2)
+        plt.imshow(synthesized)
+        plt.title('Synthesized')
+        plt.subplot(1, 3, 3)
+        plt.imshow(out)
+        plt.title('out')
+        plt.savefig(f'{model_path}-example-{i}.png')
+        plt.show()
 
 
 if __name__ == '__main__':
