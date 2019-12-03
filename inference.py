@@ -3,6 +3,7 @@ import yaml
 import skimage
 import numpy as np
 import tensorflow as tf
+from skimage.morphology import disk, binary_dilation
 
 from ReplaceNet import ReplaceNet
 from synthesize import Synthesizer
@@ -34,12 +35,18 @@ class InferenceHelper:
         self.sess, self.net, self.synthesizer, self.patch_size = get_predict_session(
             model_path, patch_size, skip_connection)
 
-    def replace(self, fg_image, fg_mask, bg_image, bg_mask, align_mask=True):
+    def replace(self, fg_image, fg_mask, bg_image, bg_mask, align_mask=True, use_dilation=1):
         """
         Input should be float image in (0, 1) and float/bool masks
+        Set dilation=0 to forbid dilation. Otherwise it specifies the size of the disk
+
         return synthesized image and fixed image (final model output)
         """
         # masks scaled to (0, 1)
+        if use_dilation:
+            dilation_disk = disk(use_dilation, np.bool)
+            bg_mask = binary_dilation(bg_mask, dilation_disk)
+
         bg_image = skimage.img_as_float(cv2.resize(bg_image, (self.patch_size, self.patch_size)))
         bg_mask = cv2.resize((bg_mask > 0).astype(np.float32),
                              (self.patch_size, self.patch_size)).astype(np.bool)
@@ -67,17 +74,18 @@ class InferenceHelper:
 def test():
     from matplotlib import pyplot as plt
     from load_data import load_parsed_sod
-    np.random.seed(0)
+    np.random.seed(10)
 
     images, masks = load_parsed_sod()
     model_path = 'tmp/model-20191202162813/model'
     inf = InferenceHelper(model_path)
 
-    for i in range(10):
+    for i in range(20):
         fg_choice = np.random.randint(9, len(images))
         bg_choice = np.random.randint(9, len(images))
         synthesized, out = inf.replace(images[fg_choice], masks[fg_choice],
-                                       images[bg_choice], masks[bg_choice])
+                                       images[bg_choice], masks[bg_choice],
+                                       use_dilation=5)
         plt.figure(figsize=(16, 8))
         plt.subplot(2, 6, 1)
         plt.imshow(images[fg_choice])
@@ -96,7 +104,7 @@ def test():
         plt.imshow(out)
         plt.title('out')
         plt.savefig(f'{model_path}-example-{i}.png')
-        plt.show()
+        # plt.show()
 
 
 if __name__ == '__main__':
