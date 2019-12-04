@@ -1,9 +1,13 @@
+import os
 import cv2
 import yaml
+import glob
+import random
 import skimage
 import numpy as np
 import tensorflow as tf
 from skimage.morphology import disk, binary_dilation
+from skimage.io import imread
 
 from ReplaceNet import ReplaceNet
 from synthesize import Synthesizer
@@ -73,30 +77,41 @@ class InferenceHelper:
 
 def test():
     from matplotlib import pyplot as plt
-    from load_data import load_parsed_sod
-    np.random.seed(10)
+    seed = 0
+    np.random.seed(seed)
+    random.seed(seed)
+    dataset_path = 'image_data'
+    cls_dict = np.load(dataset_path + '/inst_mask_dict.npy', allow_pickle=True).take(0)
 
-    images, masks = load_parsed_sod()
     model_path = 'tmp/model-20191202162813/model'
     inf = InferenceHelper(model_path)
 
     for i in range(20):
-        fg_choice = np.random.randint(9, len(images))
-        bg_choice = np.random.randint(9, len(images))
-        synthesized, out = inf.replace(images[fg_choice], masks[fg_choice],
-                                       images[bg_choice], masks[bg_choice],
+        key = np.random.choice(list(cls_dict.keys()))
+        fg_mask_name, bg_mask_name = np.random.choice(cls_dict[key], 2)
+        fg_mask = np.load(fg_mask_name, allow_pickle=True)
+        bg_mask = np.load(bg_mask_name, allow_pickle=True)
+
+        fg_image_name = dataset_path + '/img' + os.path.basename(
+            fg_mask_name[:fg_mask_name.rindex('-')]) + '.jpg'
+        bg_image_name = dataset_path + '/img' + os.path.basename(
+            bg_mask_name[:bg_mask_name.rindex('-')]) + '.jpg'
+        fg_image = skimage.img_as_float(imread(fg_image_name))
+        bg_image = skimage.img_as_float(imread(bg_image_name))
+
+        synthesized, out = inf.replace(fg_image, fg_mask, bg_image, bg_mask,
                                        use_dilation=5)
         plt.figure(figsize=(16, 8))
         plt.subplot(2, 6, 1)
-        plt.imshow(images[fg_choice])
+        plt.imshow(fg_image)
         plt.title('Foreground')
         plt.subplot(2, 6, 2)
-        plt.imshow(masks[fg_choice])
+        plt.imshow(fg_mask)
         plt.subplot(2, 6, 7)
-        plt.imshow(images[bg_choice])
+        plt.imshow(bg_image)
         plt.title('Background')
         plt.subplot(2, 6, 8)
-        plt.imshow(masks[bg_choice])
+        plt.imshow(bg_mask)
         plt.subplot(1, 3, 2)
         plt.imshow(synthesized)
         plt.title('Synthesized')
