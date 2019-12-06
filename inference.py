@@ -81,21 +81,22 @@ def test():
     np.random.seed(seed)
     random.seed(seed)
     dataset_path = 'image_data'
+    mask_path = dataset_path + '/bool_mask_sep_inst/'
     cls_dict = np.load(dataset_path + '/inst_mask_dict.npy', allow_pickle=True).take(0)
 
-    model_path = 'tmp/model-20191202162813/model'
+    model_path = 'tmp/model-20191203185450/model'
     inf = InferenceHelper(model_path)
 
     for i in range(20):
         key = np.random.choice(list(cls_dict.keys()))
         fg_mask_name, bg_mask_name = np.random.choice(cls_dict[key], 2)
-        fg_mask = np.load(fg_mask_name, allow_pickle=True)
-        bg_mask = np.load(bg_mask_name, allow_pickle=True)
+        fg_mask = np.load(mask_path + fg_mask_name, allow_pickle=True)
+        bg_mask = np.load(mask_path + bg_mask_name, allow_pickle=True)
 
-        fg_image_name = dataset_path + '/img' + os.path.basename(
-            fg_mask_name[:fg_mask_name.rindex('-')]) + '.jpg'
-        bg_image_name = dataset_path + '/img' + os.path.basename(
-            bg_mask_name[:bg_mask_name.rindex('-')]) + '.jpg'
+        fg_image_name = dataset_path + '/img/' + os.path.basename(
+            fg_mask_name[:fg_mask_name.rindex('_')]) + '.jpg'
+        bg_image_name = dataset_path + '/img/' + os.path.basename(
+            bg_mask_name[:bg_mask_name.rindex('_')]) + '.jpg'
         fg_image = skimage.img_as_float(imread(fg_image_name))
         bg_image = skimage.img_as_float(imread(bg_image_name))
 
