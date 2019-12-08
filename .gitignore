@@ -1,7 +1,11 @@
 *
 
 !.gitignore
-!*.py
+!web
+!**/*.py
+!**/*.js
+!**/*.html
+!**/*.css
 !*.ipynb
 !*.txt
 !*.sh
