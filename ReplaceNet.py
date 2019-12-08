@@ -72,11 +72,19 @@ class ReplaceNet:
     def _build_down(self, img, mask, is_training):
         # down sampling
         down_layers = []
-        # if len(mask.shape) == 3:  # add 4th dimension
-        #     mask = tf.expand_dims(mask, 3)
+        mask_shape = mask.get_shape().as_list()[1:3]
         with tf.name_scope('encoder'):
-            tensor = tf.concat([img, mask], axis=3)
+            tensor = img
             for i, c in enumerate(self.down_channels):
+                current_shape = tensor.get_shape().as_list()[1:3]
+                # concat mask to each layer, the up layers automatically gets them
+                if current_shape != mask_shape:
+                    mask_reshaped = tf.image.resize_images(mask, current_shape)
+                else:
+                    mask_reshaped = mask
+                print(mask_reshaped, tensor)
+                tensor = tf.concat([tensor, mask_reshaped], axis=3)
+
                 tensor = tf.layers.conv2d(tensor, c, [4, 4], strides=(2, 2), activation=None,
                                           padding='SAME')
                 tensor = tf.layers.batch_normalization(tensor, training=is_training)
