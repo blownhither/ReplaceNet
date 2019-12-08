@@ -23,7 +23,6 @@ class ReplaceNet:
         self.down_channels = [64, 64, 128, 128, 256, 256, 512]
         # self.fc_size = 1024       # NOTE: static fc_size is deprecated, uses a 0.5x bottleneck
         self.up_channels = [512, 256, 256, 128, 128, 64, 64]
-        self.batch_size = None
         self.lr = 1e-3
 
         # i/o tensors
