@@ -2,3 +2,4 @@ patch_size: 256
 batch_size: 16
 skip_connection: concat
 #skip_connection: add
+generator_adv_scale: 1e-2

@@ -24,12 +24,14 @@ def train():
     config['batch_size'] = 64
     config['patch_size'] = 256
     config['skip_connection'] = 'concat'
+    config['generator_adv_scale'] = 1e-2
 
     logger.info(config)
 
     np.random.seed(0)
     patch_size = config['patch_size']
     batch_size = config['batch_size']
+    generator_adv_scale = config['generator_adv_scale']
     dataset_size = get_dataset_size()
     logger.info('dataset size ' + str(dataset_size))
 
@@ -52,7 +54,8 @@ def train():
 
     # build our model
     sess = tf.Session()
-    net = ReplaceGAN(patch_size=patch_size, skip_connection=config['skip_connection'])
+    net = ReplaceGAN(patch_size=patch_size, skip_connection=config['skip_connection'],
+                     generator_adv_scale=generator_adv_scale)
     net.build(is_training=True)
     logger.info(vars(net))
     train_summary_writer = tf.summary.FileWriter(f'tmp/summary/summary-{DATETIME_STR}', sess.graph)

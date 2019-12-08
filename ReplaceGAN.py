@@ -10,14 +10,14 @@ def guarded_log(tensor):
 class ReplaceGAN(ReplaceNet):
     def __init__(self, patch_size=512, skip_connection="add", input_img=None, truth_img=None,
                  input_mask=None, discriminator_real_input=None, ref_mask=None,
-                 reconstruction_scale=1):
+                 generator_adv_scale=1e-2):
         """
         :param reconstruction_scale: scale factor for reconstruction loss
         """
         super().__init__(patch_size=patch_size, skip_connection=skip_connection,
                          input_img=input_img, truth_img=truth_img, input_mask=input_mask,
                          ref_mask=ref_mask)
-        self.reconstruction_scale = reconstruction_scale
+        self.generator_adv_scale = generator_adv_scale
         # redefine these for easier tuning
         self.down_channels = [64, 64, 128, 128, 256, 256, 512]
         self.up_channels = [512, 256, 256, 128, 128, 64, 64]
@@ -84,9 +84,8 @@ class ReplaceGAN(ReplaceNet):
         self.generator_adversarial_loss = tf.reduce_mean(-guarded_log(fake_prediction))
         gen_summaries.append(
             tf.summary.scalar('generator_adv_loss', self.generator_adversarial_loss))
-        self.generator_loss = (
-                                          self.l2_loss + self.elpips_distance) * \
-                              self.reconstruction_scale + self.generator_adversarial_loss
+        self.generator_loss = self.l2_loss + self.elpips_distance + self.generator_adv_scale * \
+                              self.generator_adversarial_loss
         gen_summaries.append(tf.summary.scalar('generator_loss', self.generator_loss))
         self.generator_summary = tf.summary.merge(gen_summaries, name='generator_summary')
 
