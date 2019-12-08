@@ -28,14 +28,12 @@ class ReplaceNet:
         # i/o tensors
         # input img should be patches in size 512
         self.input_img = input_img or tf.placeholder(shape=[None, self.size, self.size, 3],
-                                                     dtype=tf.float32)
+                                                     dtype=tf.float32, name='input_img')
         self.truth_img = truth_img or tf.placeholder(shape=[None, self.size, self.size, 3],
-                                                     dtype=tf.float32)
+                                                     dtype=tf.float32, name='truth_img')
         # `input_mask` is applied on `input_img` to locate foreground
         self.input_mask = input_mask or tf.placeholder(shape=[None, self.size, self.size, 3],
-                                                       dtype=tf.float32)
-        # `ref_mask + input_mask` is the area to apply inpainting
-        self.ref_mask = ref_mask
+                                                       dtype=tf.float32, name='input_mask')
 
         self.output_img = None
         self.metric = elpips.Metric(elpips.elpips_vgg(batch_size=1, n=1), back_prop=False)

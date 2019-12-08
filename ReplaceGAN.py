@@ -9,10 +9,15 @@ def guarded_log(tensor):
 
 class ReplaceGAN(ReplaceNet):
     def __init__(self, patch_size=512, skip_connection="add", input_img=None, truth_img=None,
-                 input_mask=None, discriminator_real_input=None, ref_mask=None):
+                 input_mask=None, discriminator_real_input=None, ref_mask=None,
+                 reconstruction_scale=1):
+        """
+        :param reconstruction_scale: scale factor for reconstruction loss
+        """
         super().__init__(patch_size=patch_size, skip_connection=skip_connection,
                          input_img=input_img, truth_img=truth_img, input_mask=input_mask,
                          ref_mask=ref_mask)
+        self.reconstruction_scale = reconstruction_scale
         # redefine these for easier tuning
         self.down_channels = [64, 64, 128, 128, 256, 256, 512]
         self.up_channels = [512, 256, 256, 128, 128, 64, 64]
@@ -24,7 +29,7 @@ class ReplaceGAN(ReplaceNet):
 
         # i/o tensors
         self.discriminator_real_input = discriminator_real_input or tf.placeholder(dtype=tf.float32,
-            shape=[None, patch_size, patch_size, 3])
+            shape=[None, patch_size, patch_size, 3], name='discriminator_real_input')
 
         # tensor set after building for discriminator
         self.real_prediction = None
@@ -37,6 +42,9 @@ class ReplaceGAN(ReplaceNet):
         self.discriminator_loss = None
         self.generator_train_op = None
         self.discriminator_train_op = None
+        self.merged_summary = None  # DEPRECATED
+        self.generator_summary = None
+        self.discriminator_summary = None
 
     def _build_discriminator(self, tensor, is_training=True):
         """build a discriminator that convolutes on input tensor until it's single pixel
@@ -68,16 +76,25 @@ class ReplaceGAN(ReplaceNet):
             fake_prediction = self._build_discriminator(self.output_img, is_training)
 
         # Generator loss
+        gen_summaries = []
         self.l2_loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
-        tf.summary.scalar('l2-loss', self.l2_loss)
+        gen_summaries.append(tf.summary.scalar('l2-loss', self.l2_loss))
         self.elpips_distance = self.metric.forward(self.truth_img, self.output_img)[0]
-        tf.summary.scalar('elpips', self.elpips_distance)
+        gen_summaries.append(tf.summary.scalar('elpips', self.elpips_distance))
         self.generator_adversarial_loss = tf.reduce_mean(-guarded_log(fake_prediction))
-        self.generator_loss = self.l2_loss + self.elpips_distance + self.generator_adversarial_loss
+        gen_summaries.append(
+            tf.summary.scalar('generator_adv_loss', self.generator_adversarial_loss))
+        self.generator_loss = (
+                                          self.l2_loss + self.elpips_distance) * \
+                              self.reconstruction_scale + self.generator_adversarial_loss
+        gen_summaries.append(tf.summary.scalar('generator_loss', self.generator_loss))
+        self.generator_summary = tf.summary.merge(gen_summaries, name='generator_summary')
 
         # Discriminator loss
         self.discriminator_loss = tf.reduce_mean(
             -guarded_log(real_prediction) - guarded_log(1 - fake_prediction))
+        self.discriminator_summary = tf.summary.scalar('discriminator_loss',
+                                                       self.discriminator_loss)
 
         # train operations
         gen_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
@@ -95,7 +112,6 @@ class ReplaceGAN(ReplaceNet):
                 var_list=dis_variables, global_step=tf.train.get_or_create_global_step())
         self.discriminator_train_op = tf.group([op, dis_update_ops])
 
-        self.merged_summary = tf.summary.merge_all()
         self.global_step = tf.train.get_or_create_global_step()
 
 

@@ -10,7 +10,7 @@ scp *.py *.yml *.yaml "$MACHINE:$REMOTE_DIR"
 
 #scp -r "$(pwd)/model_logs" "$MACHINE:$REMOTE_DIR"
 #scp -r "$(pwd)/image_data" "$MACHINE:$REMOTE_DIR"
-#scp -r "tmp/model-20191203185450" "$MACHINE:$REMOTE_DIR/tmp"
+#scp -r "tmp/model-20191202162813" "$MACHINE:$REMOTE_DIR/tmp"
 #scp "image_data/bool_mask_sep_inst.zip" "$MACHINE:$REMOTE_DIR/image_data"
 
 

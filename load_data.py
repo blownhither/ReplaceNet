@@ -86,6 +86,22 @@ def load_large_dataset_with_class(patch_size=None, align=False):
     return wrapped
 
 
+def load_large_dataset_image(patch_size=None):
+    """Load images from the large dataset """
+    def wrapped():
+        dataset_path = 'image_data'
+        imgs_list = glob.glob(dataset_path + '/img/*.jpg')
+        random.shuffle(imgs_list)
+        for fname in imgs_list:
+            image_id = os.path.basename(fname).rstrip('.jpg')
+            image = skimage.img_as_float(imread(dataset_path + '/img/' + image_id + '.jpg'))
+            if patch_size is not None:
+                image = sk_resize(image, (patch_size, patch_size))
+            yield image
+
+    return wrapped
+
+
 def test_load_large_dataset_with_class():
     from matplotlib import pyplot as plt
 
