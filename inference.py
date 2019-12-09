@@ -68,9 +68,14 @@ class InferenceHelper:
         synthesized = skimage.img_as_float(inpainted_bg.copy())
         synthesized[fg_mask.astype(np.bool)] = fg_image[fg_mask.astype(np.bool)]
 
+        bg_mask = bg_mask.astype(np.bool)
+        fg_mask = fg_mask.astype(np.bool)
         out_image = self.sess.run(self.net.output_img, feed_dict={
             self.net.input_img: [synthesized],
-            self.net.input_mask: [np.stack((bg_mask, fg_mask, fg_mask - bg_mask), axis=2)]
+            self.net.input_mask: [np.stack((bg_mask, fg_mask,
+                                            # fg_mask - bg_mask
+                                            fg_mask & (fg_mask ^ bg_mask)
+                                            ), axis=2).astype(np.float)]
         })
         return synthesized, out_image[0]
 
@@ -121,6 +126,7 @@ def test():
         plt.title('out')
         plt.savefig(f'{model_path}-example-{i}.png')
         # plt.show()
+        plt.close()
 
 
 if __name__ == '__main__':

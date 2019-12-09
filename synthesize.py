@@ -86,10 +86,11 @@ class Synthesizer:
         """
             tweak foreground by applying random factor
         """
-        tweaked =  image * np.random.uniform(0.1, 2)
-        new_image = image + tweaked
-        new_image *= (1.0/new_image.max())
-        return new_image
+        tweaked = image * np.random.uniform(0.1, 2)
+        tweaked = np.clip(tweaked, 0, 1)
+        # new_image = image + tweaked
+        # new_image *= (1.0/new_image.max())
+        return tweaked
 
     def synthesize(self, image, mask, reference_mask):
         inpainted_background_image = self.get_background(image, mask, reference_mask)

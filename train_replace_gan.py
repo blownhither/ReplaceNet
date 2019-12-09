@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-from load_data import load_large_dataset_image, load_large_dataset_with_class, get_dataset_size
+from load_data import load_large_dataset_with_class, get_dataset_size
 from ReplaceGAN import ReplaceGAN
 from synthesize import Synthesizer
 
@@ -44,7 +44,7 @@ def train():
     nxt = it.get_next()
 
     real_image_dataset = tf.data.Dataset.from_generator(
-        load_large_dataset_image(patch_size=patch_size), tf.float32)
+        load_large_dataset_with_class(patch_size=patch_size), (tf.float32, tf.bool, tf.bool))
     real_image_dataset = real_image_dataset.batch(batch_size).prefetch(16)
     real_image_it = real_image_dataset.make_initializable_iterator()
     real_image_nxt = real_image_it.get_next()
@@ -69,7 +69,7 @@ def train():
         for batch in range((dataset_size // batch_size) - 1):
             # dataset outputs are resized/aligned
             truth_img, truth_masks, reference_masks = sess.run(nxt)
-            discriminator_real_img = sess.run(real_image_nxt)
+            discriminator_real_img, discriminator_real_mask, _ = sess.run(real_image_nxt)
             input_mask = np.stack(
                 (truth_masks, reference_masks, reference_masks & (reference_masks ^ truth_masks)),
                 axis=3)
@@ -83,7 +83,6 @@ def train():
                 [net.discriminator_train_op, net.discriminator_loss, net.discriminator_summary,
                  net.global_step],
                 feed_dict={
-                    net.discriminator_real_input: discriminator_real_img,
                     net.input_img: synthesized,
                     net.input_mask: input_mask,
                     net.truth_img: truth_img})
@@ -108,21 +107,23 @@ def train():
                     l2_loss) + ' elpips: ' + str(elpips_loss) + ' adv loss: ' + str(gen_adv_loss))
         else:
             saver.save(sess, 'tmp/model' + '-' + DATETIME_STR + '/model')
-            plt.subplot(2, 3, 1)
-            plt.imshow(synthesized[0])
-            plt.title('Input')
-            plt.subplot(2, 3, 2)
-            plt.imshow(truth_img[0])
-            plt.title('Truth')
-            plt.subplot(2, 3, 3)
-            plt.imshow(out_im[0])
-            plt.title('out')
-            plt.subplot(2, 3, 5)
-            plt.imshow(truth_masks[0])
-            plt.subplot(2, 3, 6)
-            plt.imshow(reference_masks[0])
-            plt.savefig(f'tmp/model' + '-' + DATETIME_STR + '/' + str(epoch) + '.png')
-            plt.close()
+            for i in range(min(16, len(synthesized))):
+                plt.subplot(2, 3, 1)
+                plt.imshow(synthesized[i])
+                plt.title('Input')
+                plt.subplot(2, 3, 2)
+                plt.imshow(truth_img[i])
+                plt.title('Truth')
+                plt.subplot(2, 3, 3)
+                plt.imshow(out_im[i])
+                plt.title('out')
+                plt.subplot(2, 3, 5)
+                plt.imshow(truth_masks[i])
+                plt.subplot(2, 3, 6)
+                plt.imshow(reference_masks[i])
+                plt.savefig(f'tmp/model' + '-' + DATETIME_STR + '/' + str(epoch) + '-' + str(i) +
+                            '.png')
+                plt.close()
         print()
 
 
