@@ -6,6 +6,11 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
+
 from load_data import load_large_dataset_with_class, get_dataset_size
 from ReplaceGAN import ReplaceGAN
 from synthesize import Synthesizer
@@ -20,18 +25,13 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def train():
-    config = dict()
-    config['batch_size'] = 64
-    config['patch_size'] = 256
-    config['skip_connection'] = 'concat'
-    config['generator_adv_scale'] = 1e-2
-
+    config = yaml.load(open('train.yaml', 'r'), Loader=Loader)
     logger.info(config)
 
     np.random.seed(0)
     patch_size = config['patch_size']
     batch_size = config['batch_size']
-    generator_adv_scale = config['generator_adv_scale']
+    generator_adv_scale = float(config['generator_adv_scale'])
     dataset_size = get_dataset_size()
     logger.info('dataset size ' + str(dataset_size))
 

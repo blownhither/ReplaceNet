@@ -63,7 +63,6 @@ def train():
             truth_img, truth_masks, reference_masks = sess.run(nxt)
 
             # apply inpaint
-
             synthesized = np.stack([synthesizer.synthesize(im, ms, ref_ms) for im, ms, ref_ms in
                                     zip(truth_img, truth_masks, reference_masks)])
 

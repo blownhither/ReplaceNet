@@ -52,7 +52,7 @@ class ReplaceNet:
                                                         is_training)
         self.output_img, up_layers = self._build_up(encoder_fc, self.down_layers, is_training)
 
-        self.loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
+        self.loss = tf.losses.absolute_difference(self.truth_img, self.output_img)
         tf.summary.scalar('loss', self.loss)
         self.elpips_distance = self.metric.forward(self.truth_img, self.output_img)[0]
         tf.summary.scalar('elpips', self.elpips_distance)
@@ -98,6 +98,16 @@ class ReplaceNet:
             return down_layers, tensor
 
     def _build_up(self, fc, down_layers, is_training):
+        def _up_conv(tensor, out_channels):
+            """
+            Up-sample 2x input tensor and apply conv2d
+            """
+            width, height = tensor.get_shape().as_list()[1:3]
+            tensor = tf.image.resize_images(tensor, (width * 2, height * 2))
+            tensor = tf.layers.conv2d(tensor, out_channels, [4, 4], strides=[1, 1], activation=None,
+                                      padding='SAME')
+            return tensor
+
         up_layers = []
         with tf.name_scope('h-decoder'):
             # Recover from the 0.5x FC bottle neck with another FC
@@ -111,24 +121,29 @@ class ReplaceNet:
 
             for i, c in enumerate(self.up_channels):
                 # TODO: check different stride setting
-                tensor = tf.layers.conv2d_transpose(tensor, c, [4, 4], strides=[2, 2],
-                                                    activation=None, padding='SAME')
+                # tensor = tf.layers.conv2d_transpose(tensor, c, [4, 4], strides=[2, 2],
+                #                                     activation=None, padding='SAME')
+                # Up conv
+                tensor = _up_conv(tensor, c)
                 tensor = tf.layers.batch_normalization(tensor, training=is_training)
                 tensor = tf.nn.elu(tensor)
                 if self.skip_connection == "add":
                     tensor = tensor + down_layers[~i]
                 elif self.skip_connection == "concat":
                     tensor = tf.concat([tensor, down_layers[~i]], axis=3)
+                else:
+                    raise ValueError('self.skip_connection is', self.skip_connection)
                 up_layers.append(tensor)
 
         print('up', up_layers)
-        tensor = tf.layers.conv2d_transpose(tensor, 32, [4, 4], strides=[2, 2], activation=None,
-                                            padding='SAME')
+        # TODO: try without sigmoid
+        output_img = tf.layers.conv2d_transpose(tensor, 3, [4, 4], strides=[2, 2],
+                                                activation=tf.nn.sigmoid, padding='SAME')
 
         # the two lines below are not in the original paper, they may fix checkerboard
-        tensor = tf.nn.elu(tf.layers.batch_normalization(tensor))
-        output_img = tf.layers.conv2d(tensor, 3, [4, 4], strides=[1, 1], padding='SAME',
-                                      activation=tf.nn.sigmoid)
+        # tensor = tf.nn.elu(tf.layers.batch_normalization(tensor, training=is_training))
+        # output_img = tf.layers.conv2d(tensor, 3, [4, 4], strides=[1, 1], padding='SAME',
+        #                               activation=tf.nn.sigmoid)
 
         return output_img, up_layers
 
