@@ -9,9 +9,8 @@ import tensorflow as tf
 from skimage.morphology import disk, binary_dilation
 from skimage.io import imread
 
-# from ReplaceNet import ReplaceNet
-ReplaceNet = __import__('tmp/model-20191208163437/ReplaceNet.py')
-
+from ReplaceNet import ReplaceNet
+# ReplaceNet = __import__('tmp/model-20191208163437/ReplaceNet.py')
 
 from synthesize import Synthesizer
 from tweak import align_image

@@ -20,7 +20,7 @@ app.logger.addHandler(logging.FileHandler('app.log', mode='a'))
 
 def decode_image(base64_string):
     imgdata = base64.b64decode(base64_string)
-    img = imread(imgdata, plugin='imageio')
+    img = skimage.img_as_float(imread(imgdata, plugin='imageio'))
     return img
 
 
@@ -61,21 +61,43 @@ def send_assets_file(filename):
     return send_from_directory('assets', filename, as_attachment=False)
 
 
+def plot_six_graph(fg_image, fg_mask, bg_image, bg_mask, synthesized, result):
+    from matplotlib import pyplot as plt
+    plt.subplot(2, 6, 1)
+    plt.imshow(fg_image)
+    plt.subplot(2, 6, 2)
+    plt.imshow(fg_mask * 255)
+    plt.subplot(2, 6, 7)
+    plt.imshow(bg_image)
+    plt.subplot(2, 6, 8)
+    plt.imshow(bg_mask * 255)
+    plt.subplot(1, 3, 2)
+    plt.imshow(synthesized)
+    plt.subplot(1, 3, 3)
+    plt.imshow(result)
+    plt.show()
+
+
 @app.route('/replace', methods=['POST'])
 def test_post():
-    view_base64_image(request.form['background'][len('data:image/png;base64,'):])
-    view_base64_image(request.form['mask'][len('data:image/png;base64,'):])
+    # view_base64_image(request.form['background'][len('data:image/png;base64,'):])
+    # view_base64_image(request.form['mask'][len('data:image/png;base64,'):])
     foreground_id = request.form['foreground_id']
     log_str = f'foreground_id={foreground_id}'
 
     background_image = decode_image(request.form['background'][len('data:image/png;base64,'):])
+    background_image = background_image[:, :, :3]   # drop alpha
     background_mask = decode_image(request.form['mask'][len('data:image/png;base64,'):])
     background_mask = background_mask[:, :, 0] > 0
     foreground_image = imread(f'assets/foreground-{foreground_id}-raw.png')
     foreground_mask = np.load(f'assets/foreground-{foreground_id}-mask.npy', allow_pickle=True)
 
-    result = inf.replace(foreground_image, foreground_mask, background_image, background_mask,
-                         use_dilation=5)
+    synthesized, result = inf.replace(foreground_image, foreground_mask, background_image, background_mask,
+                                      use_dilation=5)
+
+    plot_six_graph(foreground_image, foreground_mask, background_image, background_mask,
+                   synthesized, result)
+    result = skimage.img_as_ubyte(result)
 
     # mat = skimage.img_as_ubyte(imread('assets/random.jpg'))
     start = time.time()
