@@ -9,7 +9,10 @@ import tensorflow as tf
 from skimage.morphology import disk, binary_dilation
 from skimage.io import imread
 
-from ReplaceNet import ReplaceNet
+# from ReplaceNet import ReplaceNet
+ReplaceNet = __import__('tmp/model-20191208163437/ReplaceNet.py')
+
+
 from synthesize import Synthesizer
 from tweak import align_image
 
@@ -35,7 +38,7 @@ def get_predict_session(model_path, patch_size=None, skip_connection=None):
 
 
 class InferenceHelper:
-    def __init__(self, model_path, patch_size=None, skip_connection=None):
+    def __init__(self, model_path, patch_size=None, skip_connection='concat'):
         self.sess, self.net, self.synthesizer, self.patch_size = get_predict_session(
             model_path, patch_size, skip_connection)
 

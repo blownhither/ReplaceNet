@@ -41,6 +41,9 @@ class ReplaceNet:
         # internal tensors, set after building
         self.down_layers = None
         self.loss = None
+        self.l2_loss = None
+        self.psnr = None
+        self.elpips_distance = None
         self.optimizer = None
         self.train_op = None
         self.merged_summary = None
@@ -53,9 +56,14 @@ class ReplaceNet:
         self.output_img, up_layers = self._build_up(encoder_fc, self.down_layers, is_training)
 
         self.loss = tf.losses.absolute_difference(self.truth_img, self.output_img)
-        tf.summary.scalar('loss', self.loss)
+        tf.summary.scalar('l1-loss', self.loss)
+        self.l2_loss = tf.losses.mean_squared_error(self.truth_img, self.output_img)
+        tf.summary.scalar('l2-loss', self.l2_loss)
         self.elpips_distance = self.metric.forward(self.truth_img, self.output_img)[0]
         tf.summary.scalar('elpips', self.elpips_distance)
+        self.psnr = tf.reduce_mean(tf.image.psnr(self.truth_img, self.output_img, max_val=1))
+        tf.summary.scalar('mean-PSNR', self.psnr)
+
         self.optimizer = tf.train.AdamOptimizer(self.lr)
 
         # for Batch Norm update
@@ -72,6 +80,14 @@ class ReplaceNet:
         mask_shape = mask.get_shape().as_list()[1:3]
         with tf.name_scope('encoder'):
             tensor = img
+            # TODO: not in original paper, add initial channal expansion, send input image over
+            # skip connection
+            tensor = tf.layers.conv2d(tensor, self.down_channels[0] // 2, [4, 4], strides=[1, 1],
+                                      padding='SAME', activation=None)
+            tensor = tf.nn.elu(tf.layers.batch_normalization(tensor, training=is_training))
+            tensor = tf.concat([tensor, img, mask], axis=3)
+            down_layers.append(tensor)
+
             for i, c in enumerate(self.down_channels):
                 current_shape = tensor.get_shape().as_list()[1:3]
                 # concat mask to each layer, the up layers automatically gets them
@@ -137,8 +153,11 @@ class ReplaceNet:
 
         print('up', up_layers)
         # TODO: try without sigmoid
-        output_img = tf.layers.conv2d_transpose(tensor, 3, [4, 4], strides=[2, 2],
-                                                activation=tf.nn.sigmoid, padding='SAME')
+        tensor = tf.layers.conv2d_transpose(tensor, self.up_channels[-1] // 2, [4, 4],
+                                            strides=[2, 2], padding='SAME')
+        # merge with skip connection
+        tensor = tf.concat([tensor, down_layers[0]], axis=3)
+        output_img = tf.layers.conv2d_transpose(tensor, 3, [4, 4], strides=[1, 1], padding='SAME')
 
         # the two lines below are not in the original paper, they may fix checkerboard
         # tensor = tf.nn.elu(tf.layers.batch_normalization(tensor, training=is_training))

@@ -8,6 +8,7 @@ import numpy as np
 from skimage.io import imread
 from flask import Flask, request, send_file, send_from_directory, jsonify
 from flask_cors import CORS
+from inference import InferenceHelper
 
 
 app = Flask(__name__)
@@ -15,6 +16,12 @@ CORS(app)
 # app.logger.set
 app.logger.addHandler(logging.StreamHandler(sys.stdout))
 app.logger.addHandler(logging.FileHandler('app.log', mode='a'))
+
+
+def decode_image(base64_string):
+    imgdata = base64.b64decode(base64_string)
+    img = imread(imgdata, plugin='imageio')
+    return img
 
 
 def view_base64_image(base64_string):
@@ -25,7 +32,6 @@ def view_base64_image(base64_string):
 
     imgdata = base64.b64decode(base64_string)
     img = imread(imgdata, plugin='imageio')
-    # print(img)
     plt.imshow(img)
     plt.show()
 
@@ -33,6 +39,11 @@ def view_base64_image(base64_string):
 @app.route('/', methods=['GET'])
 def get_index():
     return send_file('index.html')
+
+
+@app.route('/favicon.ico', methods=['GET'])
+def get_favicon():
+    return send_file('favicon.ico')
 
 
 @app.route('/index.js', methods=['GET'])
@@ -55,12 +66,20 @@ def test_post():
     view_base64_image(request.form['background'][len('data:image/png;base64,'):])
     view_base64_image(request.form['mask'][len('data:image/png;base64,'):])
     foreground_id = request.form['foreground_id']
-    print(foreground_id)
+    log_str = f'foreground_id={foreground_id}'
 
-    mat = skimage.img_as_ubyte(imread('assets/random.jpg'))
+    background_image = decode_image(request.form['background'][len('data:image/png;base64,'):])
+    background_mask = decode_image(request.form['mask'][len('data:image/png;base64,'):])
+    background_mask = background_mask[:, :, 0] > 0
+    foreground_image = imread(f'assets/foreground-{foreground_id}-raw.png')
+    foreground_mask = np.load(f'assets/foreground-{foreground_id}-mask.npy', allow_pickle=True)
 
+    result = inf.replace(foreground_image, foreground_mask, background_image, background_mask,
+                         use_dilation=5)
+
+    # mat = skimage.img_as_ubyte(imread('assets/random.jpg'))
     start = time.time()
-    r, g, b = np.split(mat, 3, axis=2)
+    r, g, b = np.split(result, 3, axis=2)
     mat = np.dstack([b, g, r])  # cv2 uses BGR order
     success, content = cv2.imencode('.png', mat)
     content = content.tobytes()
@@ -74,5 +93,7 @@ def test_post():
 
 
 if __name__ == '__main__':
+    model_path = 'tmp/model-20191203185450/model'
+    inf = InferenceHelper(model_path, patch_size=256)
     app.run(host='0.0.0.0', port=2951, debug=True)
 

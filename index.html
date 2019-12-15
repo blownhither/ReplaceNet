@@ -20,36 +20,41 @@
 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!--Google fonts-->
+    <link href="https://fonts.googleapis.com/css?family=Cherry+Swash&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="container" class="container">
-    <div class="row" style="padding-top: 100px">
-
+    <div class="row text-center small-margin-top">
+        <h1 class="col-md-12 col-lg-12">ReplaceNet</h1>
+    </div>
+    <div class="row middle-margin-top">
         <div class="col-md-6 col-lg-6">
             <div class="row">
                 <h3>1. Select a foreground</h3>
             </div>
             <div class="row">
-                <div class="col-md-4 col-lg-4">
-                    <img data-fg-id="1" class="img-fluid small-margin-top selected_image" src="assets/foreground-1.png">
+                <div class="col-md-4 col-lg-4" id="foreground-col-1">
+                    <img data-fg-id="0" class="img-fluid small-margin-top selected_image" src="assets/foreground-0.png">
+
                     <img data-fg-id="2" class="img-fluid small-margin-top" src="assets/foreground-2.png">
+                </div>
+                <div class="col-md-4 col-lg-4" id="foreground-col-2">
                     <img data-fg-id="3" class="img-fluid small-margin-top" src="assets/foreground-3.png">
+                    <img data-fg-id="13" class="img-fluid small-margin-top" src="assets/foreground-13.png">
+                    <img data-fg-id="14" class="img-fluid small-margin-top" src="assets/foreground-14.png">
                 </div>
-                <div class="col-md-4 col-lg-4">
-                    <img class="img-fluid small-margin-top" src="assets/foreground-2.png">
-                    <img class="img-fluid small-margin-top" src="assets/foreground-3.png">
-                    <img class="img-fluid small-margin-top" src="assets/foreground-1.png">
-                </div>
-                <div class="col-md-4 col-lg-4">
-                    <img class="img-fluid small-margin-top" src="assets/foreground-3.png">
-                    <img class="img-fluid small-margin-top" src="assets/foreground-2.png">
-                    <img class="img-fluid small-margin-top" src="assets/foreground-1.png">
+                <div class="col-md-4 col-lg-4" id="foreground-col-3">
+                    <img data-fg-id="15" class="img-fluid small-margin-top" src="assets/foreground-15.png">
+                    <img data-fg-id="22" class="img-fluid small-margin-top" src="assets/foreground-22.png">
+                    <img data-fg-id="27" class="img-fluid small-margin-top" src="assets/foreground-27.png">
                 </div>
             </div>
         </div>
         <div class="col-md-5 col-lg-5 offset-1">
             <div class="row">
-                <h3>2. Upload a background and mark an area to be replaced</h3>
+                <h3>2. Upload a background and draw a mask on the area to be replaced</h3>
             </div>
             <div class="row" style="min-height: 266px">
                 <div class="col-lg-11 offset-1" id="pad_container"></div>

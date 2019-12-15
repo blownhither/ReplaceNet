@@ -24,6 +24,9 @@ function crop_and_resize(image, size) {
     image.width(size);
 }
 
+const AVAILABEL_FOREGROUND_IDS = ['0', '1', '2', '3', '13', '14', '15', '22', '27', '34'];
+
+
 
 $(document).ready(function () {
     // Adapted from Konva tutorial
@@ -140,7 +143,7 @@ $(document).ready(function () {
     }
 
     // foreground selection
-    let selected_foreground = "1";
+    let selected_foreground = "0";
     function foreground_click(event) {
         // handler for click on foreground images
         let old_elem = $(`img[data-fg-id='${selected_foreground}']`);
@@ -148,6 +151,7 @@ $(document).ready(function () {
 
         let elem = $(event.target);
         let new_id = elem.attr('data-fg-id');
+        console.log('selected', new_id);
         elem.addClass('selected_image');
         selected_foreground = new_id;
     }
@@ -202,4 +206,7 @@ $(document).ready(function () {
         $('#clear_button').click(_reset_mask);
         $('img[data-fg-id]').click(foreground_click);
     })();
+
+
+
 });

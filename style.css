@@ -1,0 +1,18 @@
+.small-margin-top {
+    margin-top: 1rem;
+}
+
+h1 {
+    font-family: 'Cherry Swash', cursive;
+}
+
+.middle-margin-top {
+    margin-top: 3rem;
+}
+
+.selected_image {
+    border: #e47b00 solid;
+}
+
+
+

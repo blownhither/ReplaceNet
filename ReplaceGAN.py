@@ -24,7 +24,7 @@ class ReplaceGAN(ReplaceNet):
         self.discriminator_channels = [64, 64, 128, 128, 256, 256, 512]
         self.lr = None  # DEPRECATED
         self.generator_lr = 1e-3
-        self.discriminator_lr = 1e-3
+        self.discriminator_lr = 1e-4
 
         # tensor set after building for discriminator
         self.real_prediction = None
@@ -93,6 +93,8 @@ class ReplaceGAN(ReplaceNet):
         self.generator_loss = self.l2_loss + self.elpips_distance + self.generator_adv_scale * \
                               self.generator_adversarial_loss
         gen_summaries.append(tf.summary.scalar('generator_loss', self.generator_loss))
+        self.psnr = tf.reduce_mean(tf.image.psnr(self.truth_img, self.output_img, max_val=1))
+        gen_summaries.append(tf.summary.scalar('mean-PSNR', self.psnr))
         self.generator_summary = tf.summary.merge(gen_summaries, name='generator_summary')
 
         # Discriminator loss
