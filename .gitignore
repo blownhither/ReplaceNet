@@ -2,6 +2,7 @@
 
 !.gitignore
 !web
+!web/assets
 !**/*.py
 !**/*.js
 !**/*.html
@@ -9,7 +10,9 @@
 !*.ipynb
 !*.txt
 !*.sh
-!*.png
+!**/*.png
+!**/*.jpg
+!**/*.gif
 !*.jpg
 !*.md
 !*.yml
