@@ -179,7 +179,7 @@ $(document).ready(function () {
                             let output_img_elem = $('#output-img');
                             output_img_elem.attr('src', 'assets/loading.gif');
                             $.ajax({
-                                url: "http://localhost:2951/replace",
+                                url: "/replace",
                                 method: "POST",
                                 data: {
                                     background: background.src, // string, base64

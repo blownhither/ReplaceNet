@@ -1,8 +1,7 @@
 *
 
 !.gitignore
-!web
-!web/assets
+!assets
 !**/*.py
 !**/*.js
 !**/*.html

@@ -20,7 +20,12 @@ def align_mask(anchor, movable):
     return out
 
 
-def align_image(anchor_mask, movable_mask, movable_image):
+def align_image(anchor_mask, movable_mask, movable_image, rescale=False):
+    if rescale:
+        scale = (movable_mask.sum() / anchor_mask.sum() * 2 + 1) / 3
+        movable_mask = warp(movable_mask, AffineTransform(scale=(scale, scale)))
+        movable_image = warp(movable_image, AffineTransform(scale=(scale, scale)))
+
     center_anchor = get_mask_center(anchor_mask)
     center_movable = get_mask_center(movable_mask)
     diff = center_movable - center_anchor
@@ -36,10 +41,11 @@ def test_align_mask():
     from matplotlib import pyplot as plt
 
     images, masks = load_parsed_sod()
-    a, b = masks[0], masks[2]
+    a, b = masks[0], masks[3]
     center_a = get_mask_center(a)
     center_b = get_mask_center(b)
-    c = align_mask(a, b)
+    c, _ = align_image(a, b, images[3], True)
+    # c = align_mask(a, b)
     center_c = get_mask_center(c)
 
     # now that `anchor` and `moved` are aligned

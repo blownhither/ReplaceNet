@@ -89,7 +89,7 @@ def test_post():
     background_image = background_image[:, :, :3]   # drop alpha
     background_mask = decode_image(request.form['mask'][len('data:image/png;base64,'):])
     background_mask = background_mask[:, :, 0] > 0
-    foreground_image = imread(f'assets/foreground-{foreground_id}-raw.png')
+    foreground_image = imread(f'assets/foreground-{foreground_id}-raw.png')[:, :, :3]   # drop alpha
     foreground_mask = np.load(f'assets/foreground-{foreground_id}-mask.npy', allow_pickle=True)
 
     synthesized, result = inf.replace(foreground_image, foreground_mask, background_image, background_mask,
@@ -117,5 +117,5 @@ def test_post():
 if __name__ == '__main__':
     model_path = 'tmp/model-20191203185450/model'
     inf = InferenceHelper(model_path, patch_size=256)
-    app.run(host='0.0.0.0', port=2951, debug=True)
+    app.run(host='0.0.0.0', port=80, debug=False)
 

@@ -65,7 +65,7 @@ class InferenceHelper:
                                                        np.zeros_like(bg_mask, dtype=np.bool))
         if align_mask:
             fg_mask, fg_image = align_image(anchor_mask=bg_mask, movable_mask=fg_mask,
-                                            movable_image=fg_image)
+                                            movable_image=fg_image, rescale=True)
         # synthesized = inpainted_bg + np.expand_dims(fg_mask, 2) * fg_image
         synthesized = skimage.img_as_float(inpainted_bg.copy())
         synthesized[fg_mask.astype(np.bool)] = fg_image[fg_mask.astype(np.bool)]
