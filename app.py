@@ -84,6 +84,7 @@ def test_post():
     # view_base64_image(request.form['mask'][len('data:image/png;base64,'):])
     foreground_id = request.form['foreground_id']
     log_str = f'foreground_id={foreground_id}'
+    app.logger.info(log_str)
 
     background_image = decode_image(request.form['background'][len('data:image/png;base64,'):])
     background_image = background_image[:, :, :3]   # drop alpha

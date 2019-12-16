@@ -3,7 +3,7 @@
 }
 
 h1 {
-    font-family: 'Cherry Swash', cursive;
+    font-family: 'Pacifico', cursive;
 }
 
 .middle-margin-top {
@@ -12,6 +12,14 @@ h1 {
 
 .selected_image {
     border: #e47b00 solid;
+}
+
+body {
+    font-family: "EB Garamond", "Comfortaa", cursive;
+}
+
+footer {
+    font-family: "EB Garamond", serif;
 }
 
 
