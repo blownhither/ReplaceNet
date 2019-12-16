@@ -22,7 +22,7 @@ def align_mask(anchor, movable):
 
 def align_image(anchor_mask, movable_mask, movable_image, rescale=False):
     if rescale:
-        scale = (movable_mask.sum() / anchor_mask.sum() * 2 + 1) / 3
+        scale = max(1, (movable_mask.sum() / anchor_mask.sum() * 2 + 1) / 3)
         movable_mask = warp(movable_mask, AffineTransform(scale=(scale, scale)))
         movable_image = warp(movable_image, AffineTransform(scale=(scale, scale)))
 
